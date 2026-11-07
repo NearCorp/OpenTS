@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Close
@@ -43,7 +44,6 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
@@ -433,8 +433,8 @@ fun ServerScreen(
                         onUploadFile = { name, data -> viewModel.uploadFileToChannel(name, data) },
                         onShareFile = { target, name, size ->
                             when (target) {
-                                is ShareTarget.Channel -> viewModel.shareFileInChat(name, size, isPrivate = false, targetId = null)
-                                is ShareTarget.PrivateMessage -> viewModel.shareFileInChat(name, size, isPrivate = true, targetId = target.userId)
+                                is ShareTarget.Channel -> viewModel.shareFile(null, name, size)
+                                is ShareTarget.PrivateMessage -> viewModel.shareFile(target.userId, name, size)
                             }
                         },
                         onDismiss = { viewModel.closeFileManager() },
@@ -613,7 +613,7 @@ private fun UserDetailBottomSheet(
                             }
                         ) {
                             Icon(
-                                if (currentVolume == 0f) Icons.Default.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                                if (currentVolume == 0f) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
                             )
