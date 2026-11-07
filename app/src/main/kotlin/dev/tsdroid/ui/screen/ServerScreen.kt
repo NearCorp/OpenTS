@@ -9,8 +9,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import android.media.MediaRecorder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import dev.tsdroid.bridge.InputDeviceInfo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -129,6 +131,9 @@ fun ServerScreen(
     val micLevel by viewModel.micLevel.collectAsState()
     val isVoiceActive by viewModel.isVoiceActive.collectAsState()
     val isMuted by viewModel.isMuted.collectAsState()
+    val audioSource by viewModel.audioSource.collectAsState()
+    val preferredInputDeviceId by viewModel.preferredInputDeviceId.collectAsState()
+    val availableInputDevices by viewModel.availableInputDevices.collectAsState()
     val userVolumes by viewModel.userVolumes.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val unreadChannel by viewModel.unreadChannel.collectAsState()
@@ -193,6 +198,11 @@ fun ServerScreen(
             onNoiseSuppressionChange = { viewModel.setNoiseSuppressionEnabled(it) },
             echoCancellationEnabled = echoCancellationEnabled,
             onEchoCancellationChange = { viewModel.setEchoCancellationEnabled(it) },
+            audioSource = audioSource,
+            onAudioSourceChange = { viewModel.setAudioSource(it) },
+            preferredDeviceId = preferredInputDeviceId,
+            onPreferredDeviceIdChange = { viewModel.setPreferredInputDeviceId(it) },
+            availableDevices = availableInputDevices,
             currentGain = audioGain,
             onGainChange = { viewModel.setAudioGain(it) },
             showLinkThumbnails = showLinkThumbnails,
@@ -240,7 +250,10 @@ fun ServerScreen(
                     IconButton(onClick = { viewModel.toggleFileManager() }) {
                         Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.file_manager))
                     }
-                    IconButton(onClick = { showSettings = true }) {
+                    IconButton(onClick = {
+                        viewModel.refreshInputDevices()
+                        showSettings = true
+                    }) {
                         Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings))
                     }
                     IconButton(onClick = { viewModel.disconnect() }) {
@@ -668,6 +681,11 @@ private fun SettingsDialog(
     onNoiseSuppressionChange: (Boolean) -> Unit,
     echoCancellationEnabled: Boolean,
     onEchoCancellationChange: (Boolean) -> Unit,
+    audioSource: Int,
+    onAudioSourceChange: (Int) -> Unit,
+    preferredDeviceId: Int,
+    onPreferredDeviceIdChange: (Int) -> Unit,
+    availableDevices: List<InputDeviceInfo>,
     currentGain: Float,
     onGainChange: (Float) -> Unit,
     showLinkThumbnails: Boolean,
@@ -754,6 +772,73 @@ private fun SettingsDialog(
                     onValueChangeFinished = { onVadThresholdChange(vadSlider) },
                     valueRange = 0.05f..0.95f,
                 )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Section: Microphone Audio Source
+                Text(
+                    text = stringResource(R.string.audio_source),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+
+                val sources = listOf(
+                    MediaRecorder.AudioSource.MIC to stringResource(R.string.audio_source_mic),
+                    MediaRecorder.AudioSource.VOICE_COMMUNICATION to stringResource(R.string.audio_source_voice_communication),
+                    MediaRecorder.AudioSource.UNPROCESSED to stringResource(R.string.audio_source_unprocessed),
+                    MediaRecorder.AudioSource.CAMCORDER to stringResource(R.string.audio_source_camcorder),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    sources.forEach { (srcId, srcLabel) ->
+                        FilterChip(
+                            selected = audioSource == srcId,
+                            onClick = { onAudioSourceChange(srcId) },
+                            label = { Text(srcLabel, style = MaterialTheme.typography.bodySmall) },
+                            leadingIcon = if (audioSource == srcId) {
+                                { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            } else null,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Section: Input Device (Physical microphone)
+                Text(
+                    text = stringResource(R.string.input_device),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Default / Auto
+                    FilterChip(
+                        selected = preferredDeviceId == -1,
+                        onClick = { onPreferredDeviceIdChange(-1) },
+                        label = { Text(stringResource(R.string.device_default), style = MaterialTheme.typography.bodySmall) },
+                        leadingIcon = if (preferredDeviceId == -1) {
+                            { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    // Detected devices
+                    availableDevices.forEach { dev ->
+                        FilterChip(
+                            selected = preferredDeviceId == dev.id,
+                            onClick = { onPreferredDeviceIdChange(dev.id) },
+                            label = { Text(dev.name, style = MaterialTheme.typography.bodySmall) },
+                            leadingIcon = if (preferredDeviceId == dev.id) {
+                                { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            } else null,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
 
                 Spacer(Modifier.height(12.dp))
 

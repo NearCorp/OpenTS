@@ -118,5 +118,17 @@
     <string name="client_id">Client ID: %1$d</string>
     <string name="database_id">Database ID: %1$d</string>
     <string name="audio_settings">Audio Settings</string>
+    <string name="audio_source">Microphone Audio Source</string>
+    <string name="audio_source_mic">Main Microphone (Bottom)</string>
+    <string name="audio_source_voice_communication">Call / Voice Comm (Top)</string>
+    <string name="audio_source_unprocessed">Unprocessed (Raw audio)</string>
+    <string name="audio_source_camcorder">Camcorder Microphone</string>
+    <string name="input_device">Input Device</string>
+    <string name="device_default">Default (Auto)</string>
+    <string name="mic_device_builtin">Built-in Microphone</string>
+    <string name="mic_device_wired_headset">Wired Headset</string>
+    <string name="mic_device_bluetooth">Bluetooth Headset</string>
+    <string name="mic_device_usb">USB Microphone</string>
+    <string name="mic_device_other">Other Audio Device</string>
     <string name="general_settings">General</string>
 </resources>

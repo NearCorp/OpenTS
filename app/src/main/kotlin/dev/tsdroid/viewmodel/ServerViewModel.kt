@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.BitmapFactory
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
 import android.os.IBinder
@@ -21,6 +22,7 @@ import dev.tsdroid.bridge.AvatarCache
 import dev.tsdroid.bridge.AudioBridge
 import dev.tsdroid.bridge.FileCache
 import dev.tsdroid.bridge.IconCache
+import dev.tsdroid.bridge.InputDeviceInfo
 import dev.tsdroid.bridge.TsClient
 import dev.tsdroid.bridge.TsFileEntry
 import dev.tsdroid.R
@@ -131,6 +133,15 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
     val echoCancellationEnabled: StateFlow<Boolean> = settingsStore.echoCancellationEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val audioSource: StateFlow<Int> = settingsStore.audioSource
+        .stateIn(viewModelScope, SharingStarted.Eagerly, MediaRecorder.AudioSource.MIC)
+
+    val preferredInputDeviceId: StateFlow<Int> = settingsStore.preferredInputDeviceId
+        .stateIn(viewModelScope, SharingStarted.Eagerly, -1)
+
+    private val _availableInputDevices = MutableStateFlow<List<InputDeviceInfo>>(emptyList())
+    val availableInputDevices: StateFlow<List<InputDeviceInfo>> = _availableInputDevices.asStateFlow()
 
     private val _micLevel = MutableStateFlow(0f)
     val micLevel: StateFlow<Float> = _micLevel.asStateFlow()
@@ -305,9 +316,12 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 binder.audioBridge.isVoiceActivationMode = !isPttMode.value
                 binder.audioBridge.isPttPressed = false
                 binder.audioBridge.vadThreshold = vadThreshold.value
+                binder.audioBridge.audioSource = audioSource.value
+                binder.audioBridge.preferredInputDeviceId = preferredInputDeviceId.value
                 binder.audioBridge.isNsEnabled = noiseSuppressionEnabled.value
                 binder.audioBridge.isAecEnabled = echoCancellationEnabled.value
                 binder.audioBridge.setMuted(false)
+                _availableInputDevices.value = binder.audioBridge.getAvailableInputDevices()
 
                 // Restore individual user volumes
                 _userVolumes.value.forEach { (userId, vol) ->
@@ -569,6 +583,22 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     fun setVadThreshold(threshold: Float) {
         audioBridge?.vadThreshold = threshold
         viewModelScope.launch { settingsStore.setVadThreshold(threshold) }
+    }
+
+    fun setAudioSource(source: Int) {
+        audioBridge?.audioSource = source
+        viewModelScope.launch { settingsStore.setAudioSource(source) }
+    }
+
+    fun setPreferredInputDeviceId(deviceId: Int) {
+        audioBridge?.preferredInputDeviceId = deviceId
+        viewModelScope.launch { settingsStore.setPreferredInputDeviceId(deviceId) }
+    }
+
+    fun refreshInputDevices() {
+        audioBridge?.let {
+            _availableInputDevices.value = it.getAvailableInputDevices()
+        }
     }
 
     fun setNoiseSuppressionEnabled(enabled: Boolean) {

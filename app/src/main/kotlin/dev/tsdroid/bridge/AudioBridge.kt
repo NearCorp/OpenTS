@@ -5,7 +5,9 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
@@ -13,6 +15,7 @@ import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import androidx.core.content.ContextCompat
+import dev.tsdroid.R
 import dev.tslib.AudioConfig
 import dev.tslib.OpusCodec
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +33,12 @@ import kotlinx.coroutines.launch
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.sqrt
+
+data class InputDeviceInfo(
+    val id: Int,
+    val name: String,
+    val typeName: String,
+)
 
 class AudioBridge(
     private val context: Context,
@@ -98,6 +107,26 @@ class AudioBridge(
     @Volatile
     var vadThreshold: Float = 0.25f
 
+    @Volatile
+    var audioSource: Int = MediaRecorder.AudioSource.MIC
+        set(value) {
+            if (field != value) {
+                field = value
+                restartCapture()
+            }
+        }
+
+    @Volatile
+    var preferredInputDeviceId: Int = -1
+        set(value) {
+            if (field != value) {
+                field = value
+                restartCapture()
+            }
+        }
+
+    private var captureScope: CoroutineScope? = null
+
     private val _isMuted = MutableStateFlow(false)
     val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
 
@@ -125,18 +154,29 @@ class AudioBridge(
             != PackageManager.PERMISSION_GRANTED
         ) return
 
+        captureScope = scope
+
         val minBuf = AudioRecord.getMinBufferSize(
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
         val record = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            audioSource,
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
             maxOf(minBuf, FRAME_SIZE_BYTES * 4),
         )
+
+        if (preferredInputDeviceId != -1) {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            val dev = audioManager?.getDevices(AudioManager.GET_DEVICES_INPUTS)?.find { it.id == preferredInputDeviceId }
+            if (dev != null) {
+                record.setPreferredDevice(dev)
+            }
+        }
+
         audioRecord = record
 
         // Attach hardware audio effects if supported
@@ -360,6 +400,34 @@ class AudioBridge(
 
     fun toggleMute() {
         setMuted(!_isMuted.value)
+    }
+
+    fun restartCapture() {
+        val scope = captureScope ?: return
+        if (_isCapturing.value) {
+            stopCapture()
+            startCapture(scope)
+        }
+    }
+
+    fun getAvailableInputDevices(): List<InputDeviceInfo> {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return emptyList()
+        val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+        return devices.map { dev ->
+            val typeName = when (dev.type) {
+                AudioDeviceInfo.TYPE_BUILTIN_MIC -> context.getString(R.string.mic_device_builtin)
+                AudioDeviceInfo.TYPE_WIRED_HEADSET -> context.getString(R.string.mic_device_wired_headset)
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET -> context.getString(R.string.mic_device_bluetooth)
+                AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET -> context.getString(R.string.mic_device_usb)
+                else -> context.getString(R.string.mic_device_other)
+            }
+            val devName = dev.productName?.toString().takeIf { !it.isNullOrBlank() } ?: typeName
+            InputDeviceInfo(
+                id = dev.id,
+                name = "$devName ($typeName)",
+                typeName = typeName,
+            )
+        }
     }
 
     fun release() {

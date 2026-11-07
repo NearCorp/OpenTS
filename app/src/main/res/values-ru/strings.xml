@@ -118,5 +118,17 @@
     <string name="client_id">ID клиента: %1$d</string>
     <string name="database_id">ID в базе: %1$d</string>
     <string name="audio_settings">Настройки звука</string>
+    <string name="audio_source">Источник микрофона</string>
+    <string name="audio_source_mic">Основной микрофон (снизу)</string>
+    <string name="audio_source_voice_communication">Телефонный режим (сверху)</string>
+    <string name="audio_source_unprocessed">Студийный / Чистый звук</string>
+    <string name="audio_source_camcorder">Микрофон камеры</string>
+    <string name="input_device">Аудиоустройство ввода</string>
+    <string name="device_default">Автовыбор (по умолчанию)</string>
+    <string name="mic_device_builtin">Встроенный микрофон</string>
+    <string name="mic_device_wired_headset">Проводная гарнитура</string>
+    <string name="mic_device_bluetooth">Bluetooth-гарнитура</string>
+    <string name="mic_device_usb">USB-микрофон</string>
+    <string name="mic_device_other">Другое устройство</string>
     <string name="general_settings">Основные настройки</string>
 </resources>
