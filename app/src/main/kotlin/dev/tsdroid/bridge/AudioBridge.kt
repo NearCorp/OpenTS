@@ -93,9 +93,12 @@ class AudioBridge(
     var isVoiceActivationMode: Boolean = false
 
     @Volatile
+    var isPttPressed: Boolean = false
+
+    @Volatile
     var vadThreshold: Float = 0.25f
 
-    private val _isMuted = MutableStateFlow(true) // Start muted (PTT default)
+    private val _isMuted = MutableStateFlow(false)
     val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
 
     private val _isCapturing = MutableStateFlow(false)
@@ -162,22 +165,22 @@ class AudioBridge(
 
                     // Determine transmission state
                     val shouldTransmit: Boolean
-                    if (isVoiceActivationMode) {
+                    if (_isMuted.value) {
+                        shouldTransmit = false
+                    } else if (isVoiceActivationMode) {
                         if (normalizedLevel >= vadThreshold) {
                             hangoverRemaining = HANGOVER_FRAMES
                         } else if (hangoverRemaining > 0) {
                             hangoverRemaining--
                         }
-                        val isVAdDetected = hangoverRemaining > 0
-                        shouldTransmit = !_isMuted.value && isVAdDetected
+                        shouldTransmit = hangoverRemaining > 0
                     } else {
-                        // PTT mode: transmit whenever unmuted (button pressed)
-                        shouldTransmit = !_isMuted.value
+                        // PTT mode: transmit whenever PTT button is pressed
+                        shouldTransmit = isPttPressed
                     }
 
                     if (_isVoiceActive.value != shouldTransmit) {
                         _isVoiceActive.value = shouldTransmit
-                        tsClient.setInputMuted(!shouldTransmit)
                     }
 
                     if (shouldTransmit) {
@@ -351,11 +354,8 @@ class AudioBridge(
         _isMuted.value = muted
         if (muted) {
             _isVoiceActive.value = false
-            tsClient.setInputMuted(true)
-        } else if (!isVoiceActivationMode) {
-            _isVoiceActive.value = true
-            tsClient.setInputMuted(false)
         }
+        tsClient.setInputMuted(muted)
     }
 
     fun toggleMute() {

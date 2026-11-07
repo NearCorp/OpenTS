@@ -138,6 +138,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private val _isVoiceActive = MutableStateFlow(false)
     val isVoiceActive: StateFlow<Boolean> = _isVoiceActive.asStateFlow()
 
+    private val _isMuted = MutableStateFlow(false)
+    val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
+
     private val _userVolumes = MutableStateFlow<Map<Int, Float>>(emptyMap())
     val userVolumes: StateFlow<Map<Int, Float>> = _userVolumes.asStateFlow()
 
@@ -300,9 +303,11 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 // Apply persisted audio settings
                 binder.audioBridge.gainFactor = audioGain.value
                 binder.audioBridge.isVoiceActivationMode = !isPttMode.value
+                binder.audioBridge.isPttPressed = false
                 binder.audioBridge.vadThreshold = vadThreshold.value
                 binder.audioBridge.isNsEnabled = noiseSuppressionEnabled.value
                 binder.audioBridge.isAecEnabled = echoCancellationEnabled.value
+                binder.audioBridge.setMuted(false)
 
                 // Restore individual user volumes
                 _userVolumes.value.forEach { (userId, vol) ->
@@ -314,6 +319,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 viewModelScope.launch {
                     binder.audioBridge.isVoiceActive.collect { _isVoiceActive.value = it }
+                }
+                viewModelScope.launch {
+                    binder.audioBridge.isMuted.collect { _isMuted.value = it }
                 }
 
                 // Start event loop (guarded by AtomicBoolean — safe if already running)
@@ -541,16 +549,21 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch { settingsStore.setIsPttMode(isPtt) }
         audioBridge?.let {
             it.isVoiceActivationMode = !isPtt
-            if (isPtt) {
-                it.setMuted(true)
-            } else {
-                it.setMuted(false)
-            }
+            it.isPttPressed = false
+            it.setMuted(false)
         }
     }
 
     fun toggleVoiceMode() {
         setIsPttMode(!isPttMode.value)
+    }
+
+    fun toggleMute() {
+        audioBridge?.toggleMute()
+    }
+
+    fun setMuted(muted: Boolean) {
+        audioBridge?.setMuted(muted)
     }
 
     fun setVadThreshold(threshold: Float) {
@@ -579,7 +592,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setPushToTalk(pressed: Boolean) {
         if (isPttMode.value) {
-            audioBridge?.setMuted(!pressed)
+            audioBridge?.isPttPressed = pressed
         }
     }
 

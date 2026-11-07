@@ -104,10 +104,8 @@ class TsConnectionService : Service() {
         serviceScope.launch {
             tsClient.connect(address, identity, nickname, password)
             audioBridge.startCapture(serviceScope)
-            // Sync initial mute state with server (PTT starts muted)
-            if (audioBridge.isMuted.value) {
-                tsClient.setInputMuted(true)
-            }
+            // Sync initial mute state with server
+            tsClient.setInputMuted(audioBridge.isMuted.value)
             updateNotification()
             // Start event loop
             launch { tsClient.eventLoop() }

@@ -43,7 +43,9 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
@@ -126,6 +128,7 @@ fun ServerScreen(
     val echoCancellationEnabled by viewModel.echoCancellationEnabled.collectAsState()
     val micLevel by viewModel.micLevel.collectAsState()
     val isVoiceActive by viewModel.isVoiceActive.collectAsState()
+    val isMuted by viewModel.isMuted.collectAsState()
     val userVolumes by viewModel.userVolumes.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val unreadChannel by viewModel.unreadChannel.collectAsState()
@@ -336,9 +339,24 @@ fun ServerScreen(
                             }
                         }
                     } else {
-                        // VAD mode: glows green when speaking
-                        val vadColor = if (isVoiceActive) Color(0xFF2E7D32) else MaterialTheme.colorScheme.surfaceVariant
-                        val vadTint = if (isVoiceActive) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        // VAD mode:
+                        // If muted: shows red mic-off. Tap to unmute.
+                        // If unmuted: glows green when speaking. Tap to mute.
+                        val vadColor = when {
+                            isMuted -> MaterialTheme.colorScheme.errorContainer
+                            isVoiceActive -> Color(0xFF2E7D32)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                        val vadTint = when {
+                            isMuted -> MaterialTheme.colorScheme.onErrorContainer
+                            isVoiceActive -> Color.White
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        val vadBorderColor = when {
+                            isMuted -> MaterialTheme.colorScheme.error
+                            isVoiceActive -> Color(0xFF81C784)
+                            else -> MaterialTheme.colorScheme.outlineVariant
+                        }
 
                         Box(
                             modifier = Modifier
@@ -346,22 +364,22 @@ fun ServerScreen(
                                 .clip(CircleShape)
                                 .background(vadColor)
                                 .border(
-                                    width = if (isVoiceActive) 3.dp else 1.dp,
-                                    color = if (isVoiceActive) Color(0xFF81C784) else MaterialTheme.colorScheme.outlineVariant,
+                                    width = if (isVoiceActive || isMuted) 3.dp else 1.dp,
+                                    color = vadBorderColor,
                                     shape = CircleShape,
                                 )
-                                .clickable { viewModel.toggleVoiceMode() },
+                                .clickable { viewModel.toggleMute() },
                             contentAlignment = Alignment.Center,
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
-                                    Icons.Default.Mic,
-                                    contentDescription = stringResource(R.string.mode_vad),
+                                    if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                    contentDescription = stringResource(if (isMuted) R.string.unmute_mic else R.string.mode_vad),
                                     modifier = Modifier.size(30.dp),
                                     tint = vadTint,
                                 )
                                 Text(
-                                    "VAD",
+                                    if (isMuted) stringResource(R.string.status_muted) else "VAD",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = vadTint,
@@ -379,9 +397,9 @@ fun ServerScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                     ) {
                         Icon(
-                            if (isPttMode) Icons.Default.MicOff else Icons.Default.Mic,
+                            if (isPttMode) Icons.Default.RecordVoiceOver else Icons.Default.TouchApp,
                             contentDescription = stringResource(R.string.transmission_mode),
-                            tint = if (isPttMode) MaterialTheme.colorScheme.secondary else Color(0xFF4CAF50),
+                            tint = if (isPttMode) MaterialTheme.colorScheme.primary else Color(0xFF4CAF50),
                         )
                     }
                 }
@@ -687,14 +705,14 @@ private fun SettingsDialog(
                         selected = isPttMode,
                         onClick = { onPttModeChange(true) },
                         label = { Text("PTT") },
-                        leadingIcon = { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(Icons.Default.TouchApp, contentDescription = null, modifier = Modifier.size(16.dp)) },
                         modifier = Modifier.weight(1f),
                     )
                     FilterChip(
                         selected = !isPttMode,
                         onClick = { onPttModeChange(false) },
                         label = { Text("VAD") },
-                        leadingIcon = { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(Icons.Default.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(16.dp)) },
                         modifier = Modifier.weight(1f),
                     )
                 }
