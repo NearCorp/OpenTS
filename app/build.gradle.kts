@@ -9,7 +9,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.flammedemon.ts6droid"
+        applicationId = "org.nearcorp.opents"
         minSdk = 29
         targetSdk = 35
         versionCode = 1
@@ -21,9 +21,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("${rootDir}/release.keystore")
-            storePassword = "ts6droid"
-            keyAlias = "ts6droid"
-            keyPassword = "ts6droid"
+            storePassword = "opents"
+            keyAlias = "opents"
+            keyPassword = "opents"
         }
     }
 
@@ -34,7 +34,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (file("${rootDir}/release.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -1,88 +1,65 @@
-# TS6 Droid
+# OpenTS
 
-Client libre et léger TeamSpeak 3/6 pour Android, construit avec [tslib](https://github.com/flamme-demon/tslib_multi) (bibliothèque Rust) et Jetpack Compose.
+Клиент с открытым исходным кодом TeamSpeak 3 / TeamSpeak 6 для Android, построенный на базе [tslib](https://github.com/flamme-demon/tslib_multi) (библиотека Rust) и Jetpack Compose (Material 3).
 
-## Fonctionnalités
+## Возможности
 
-- **Connexion** aux serveurs TeamSpeak 3 et 6
-- **Favoris** avec nom du serveur et icône (récupérés automatiquement)
-- **Reconnexion automatique** au dernier serveur
-- **Chat** channel et messages privés avec historique persistant
-- **Push-to-Talk** avec codec Opus (48 kHz, mono)
-- **Arborescence des channels** avec liste des utilisateurs
-- **Gestionnaire de fichiers** — navigation, upload, download, création de dossiers
-- **Parcours des channels** avant connexion (sélecteur de channel)
-- **BBCode** dans les messages
+- **Подключение** к серверам TeamSpeak 3 и TeamSpeak 6
+- **Material 3 Design** с адаптивной темной и светлой темой, карточками и современными формами
+- **Голосовая связь**:
+  - **Настоящий VAD (Voice Activity Detection)**: порог срабатывания с живым визуальным индикатором уровня микрофона
+  - **Push-to-Talk (PTT)** с быстрым переключением между режимами
+  - **Акустическое эхоподавление (AEC)** и **Шумоподавление (NS)**
+  - **Индивидуальная регулировка громкости пользователей** (0% – 200%) и быстрое отключение звука отдельного собеседника
+  - Кодек Opus (48 кГц, моно, 20 мс фреймы)
+- **Иерархическое дерево каналов** со статусами пользователей (говорит, микрофон выключен, отошел, запись)
+- **Чат канала и личные сообщения**:
+  - Сохранение истории сообщений
+  - BBCode разметка
+  - Встроенные превью изображений и видео (YouTube, Dailymotion)
+- **Файловый менеджер каналов**: навигация, скачивание, загрузка, переименование, удаление и отправка файлов в чат
+- **Закладки** серверов с автоматической загрузкой иконок и функцией автоподключения
+- **Многоязычность**: русский, английский и французский языки
 
-## Architecture
+## Архитектура
 
 ```
 app/src/main/
-├── java/dev/tslib/          # Classes JNI (pont vers la lib Rust)
+├── java/dev/tslib/          # JNI-классы (мост к нативной Rust-библиотеке)
 ├── kotlin/dev/tsdroid/
-│   ├── bridge/              # TsClient (coroutines + StateFlow)
-│   ├── data/                # BookmarkStore, ServerBookmark, MessageStore
-│   ├── service/             # TsConnectionService (foreground service)
+│   ├── bridge/              # TsClient, AudioBridge (VAD, AEC, NS), кэши аватаров и иконок
+│   ├── data/                # BookmarkStore, SettingsStore, MessageStore
+│   ├── service/             # TsConnectionService (Foreground Service)
 │   ├── viewmodel/           # ConnectionViewModel, ServerViewModel
 │   └── ui/
 │       ├── screen/          # ConnectionScreen, ServerScreen
-│       └── component/       # ChannelTree, ChatView, MessageBubble, ...
-└── res/                     # Ressources Android
+│       └── component/       # ChannelTree, ChatView, MessageBubble, FileManagerDialog
+└── res/                     # Ресурсы и локализации (ru, en, default)
 ```
 
-La bibliothèque native `tslib` (Rust) gère le protocole TeamSpeak via JNI. Le service Android `TsConnectionService` maintient la connexion en arrière-plan avec une notification persistante.
+## Требования для сборки
 
-## Prérequis
-
-- **Android Studio** (ou Gradle 8.14+)
+- **Android Studio** Ladybug или новее (Gradle 8.7+)
 - **JDK 17**
-- **Rust** avec [cargo-ndk](https://github.com/nickelc/cargo-ndk)
-- **Android NDK** 27.x (via SDK Manager)
-- **tslib** cloné à côté du projet (`../tslib`)
+- **Rust** и утилита [cargo-ndk](https://github.com/nickelc/cargo-ndk)
+- **Android NDK** 27.x
+- **tslib** склонированный рядом с проектом (`../tslib`):
+  `git clone https://github.com/flamme-demon/tslib_multi ../tslib`
 
-## Build
+## Сборка
 
-### 1. Compiler la bibliothèque native
-
-```bash
-cd ../tslib
-
-ANDROID_NDK=~/Android/Sdk/ndk/27.2.12479018 \
-CMAKE_POLICY_VERSION_MINIMUM=3.5 \
-cargo ndk -t arm64-v8a \
-  -o ../TS6_Droid/app/src/main/jniLibs \
-  build --release -p tslib-jni --features vendored-openssl
-```
-
-Ou via la tâche Gradle intégrée :
-
+### 1. Сборка нативной библиотеки tslib
 ```bash
 ./gradlew buildRustLibs
 ```
+*(Либо вручную через `cargo ndk -t arm64-v8a -t x86_64 -o app/src/main/jniLibs build --release -p tslib-jni --features vendored-openssl`)*
 
-### 2. Compiler l'APK
-
+### 2. Сборка APK
 ```bash
 ./gradlew assembleDebug
 ```
+Готовый APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
-L'APK se trouve dans `app/build/outputs/apk/debug/`.
+## Лицензия
 
-### 3. Installer sur un appareil
-
-```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-## Configuration
-
-| Paramètre | Valeur |
-|-----------|--------|
-| `minSdk` | 29 (Android 10) |
-| `targetSdk` | 35 |
-| `compileSdk` | 35 |
-| Audio | Opus, 48 kHz, mono, frames 20 ms |
-
-## Licence
-
-Ce projet est un logiciel libre. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+Проект распространяется под свободной лицензией. См. файл LICENSE.

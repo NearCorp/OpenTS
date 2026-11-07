@@ -2,7 +2,10 @@ package dev.tsdroid.ui.screen
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -26,25 +29,34 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -55,6 +67,8 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -68,15 +82,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.tsdroid.R
-import dev.tslib.ConnectionState
-import dev.tslib.User
 import dev.tsdroid.ui.component.ChannelTree
 import dev.tsdroid.ui.component.ChatView
 import dev.tsdroid.ui.component.FileManagerDialog
@@ -85,6 +103,8 @@ import dev.tsdroid.viewmodel.ChatMessage
 import dev.tsdroid.viewmodel.DownloadState
 import dev.tsdroid.viewmodel.FileAttachment
 import dev.tsdroid.viewmodel.ServerViewModel
+import dev.tslib.ConnectionState
+import dev.tslib.User
 import kotlinx.coroutines.flow.StateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -101,6 +121,12 @@ fun ServerScreen(
     val channelMessages by viewModel.channelMessages.collectAsState()
     val privateMessages by viewModel.privateMessages.collectAsState()
     val isPttMode by viewModel.isPttMode.collectAsState()
+    val vadThreshold by viewModel.vadThreshold.collectAsState()
+    val noiseSuppressionEnabled by viewModel.noiseSuppressionEnabled.collectAsState()
+    val echoCancellationEnabled by viewModel.echoCancellationEnabled.collectAsState()
+    val micLevel by viewModel.micLevel.collectAsState()
+    val isVoiceActive by viewModel.isVoiceActive.collectAsState()
+    val userVolumes by viewModel.userVolumes.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val unreadChannel by viewModel.unreadChannel.collectAsState()
     val unreadPrivate by viewModel.unreadPrivate.collectAsState()
@@ -114,16 +140,15 @@ fun ServerScreen(
     val channelPermissions by viewModel.currentChannelPermissions.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
+    var selectedUserForDetails by remember { mutableStateOf<User?>(null) }
     var chatOpen by remember { mutableStateOf(false) }
     var chatEverOpened by remember { mutableStateOf(false) }
     var chatTab by remember { mutableIntStateOf(0) }
     var messageText by remember { mutableStateOf("") }
     var pmTargetId by remember { mutableStateOf<Int?>(null) }
 
-    // Resolve pmTarget User from users list
     val pmTarget = pmTargetId?.let { id -> users.find { it.id == id } }
 
-    // Build PM conversation user list (id → name) from message map + users list
     val context = LocalContext.current
     val pmConversationUsers = remember(privateMessages, users) {
         privateMessages.keys.map { userId ->
@@ -136,7 +161,6 @@ fun ServerScreen(
 
     val totalUnreadPrivate = unreadPrivate.values.sum()
 
-    // Sync chat state to ViewModel for unread tracking
     LaunchedEffect(chatOpen, chatTab, pmTargetId) {
         viewModel.setChatState(chatOpen, chatTab, pmTargetId)
     }
@@ -146,7 +170,6 @@ fun ServerScreen(
         onDispose {}
     }
 
-    // Navigate away on disconnect — one-shot via LaunchedEffect
     LaunchedEffect(connectionState) {
         if (connectionState == ConnectionState.DISCONNECTED) {
             onDisconnected()
@@ -158,6 +181,15 @@ fun ServerScreen(
 
     if (showSettings) {
         SettingsDialog(
+            isPttMode = isPttMode,
+            onPttModeChange = { viewModel.setIsPttMode(it) },
+            vadThreshold = vadThreshold,
+            onVadThresholdChange = { viewModel.setVadThreshold(it) },
+            micLevel = micLevel,
+            noiseSuppressionEnabled = noiseSuppressionEnabled,
+            onNoiseSuppressionChange = { viewModel.setNoiseSuppressionEnabled(it) },
+            echoCancellationEnabled = echoCancellationEnabled,
+            onEchoCancellationChange = { viewModel.setEchoCancellationEnabled(it) },
             currentGain = audioGain,
             onGainChange = { viewModel.setAudioGain(it) },
             showLinkThumbnails = showLinkThumbnails,
@@ -168,10 +200,39 @@ fun ServerScreen(
         )
     }
 
+    selectedUserForDetails?.let { user ->
+        UserDetailBottomSheet(
+            user = user,
+            avatar = user.uid?.let { userAvatars[it] },
+            currentVolume = userVolumes[user.id] ?: 1.0f,
+            onVolumeChange = { viewModel.setUserVolume(user.id, it) },
+            onSendPm = {
+                pmTargetId = user.id
+                chatTab = 1
+                chatOpen = true
+                selectedUserForDetails = null
+            },
+            onDismiss = { selectedUserForDetails = null },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(serverInfo?.name ?: stringResource(R.string.server)) },
+                title = {
+                    Column {
+                        Text(
+                            text = serverInfo?.name ?: stringResource(R.string.server),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "${channels.size} ${stringResource(R.string.tab_channel).lowercase()} \u00B7 ${users.size} online",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.toggleFileManager() }) {
                         Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.file_manager))
@@ -183,55 +244,69 @@ fun ServerScreen(
                         Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = stringResource(R.string.disconnect))
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
             )
         },
         bottomBar = {
             Surface(
-                tonalElevation = 3.dp,
+                tonalElevation = 6.dp,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Chat FAB with badge
+                    // Left: Chat Button with Badge
                     Box {
-                        IconButton(onClick = {
-                            chatOpen = !chatOpen
-                        }) {
+                        IconButton(
+                            onClick = { chatOpen = !chatOpen },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(if (chatOpen) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant),
+                        ) {
                             Icon(
                                 Icons.Default.ChatBubble,
                                 contentDescription = stringResource(R.string.chat),
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = if (chatOpen) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
                             )
                         }
                         if (totalUnread > 0) {
                             Badge(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .offset(x = (-4).dp, y = 4.dp),
+                                    .offset(x = 2.dp, y = (-2).dp),
                             ) {
                                 Text("$totalUnread")
                             }
                         }
                     }
 
-                    // Center button: PTT or Mute depending on MODE (not mute state)
+                    // Center: PTT or VAD Button
                     if (isPttMode) {
-                        // PTT mode: hold to talk
                         var isPressed by remember { mutableStateOf(false) }
-                        val pttBackground = if (isPressed) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        val pttTint = if (isPressed) MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        val pttBackground = if (isPressed) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.primaryContainer
+                        val pttTint = if (isPressed) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onPrimaryContainer
+
                         Box(
                             modifier = Modifier
-                                .size(72.dp)
+                                .size(76.dp)
                                 .clip(CircleShape)
                                 .background(pttBackground)
+                                .border(
+                                    width = if (isPressed) 4.dp else 0.dp,
+                                    color = if (isPressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Transparent,
+                                    shape = CircleShape,
+                                )
                                 .pointerInput(Unit) {
                                     detectTapGestures(
                                         onPress = {
@@ -249,49 +324,64 @@ fun ServerScreen(
                                 Icon(
                                     Icons.Default.Mic,
                                     contentDescription = stringResource(R.string.push_to_talk),
-                                    modifier = Modifier.size(28.dp),
+                                    modifier = Modifier.size(30.dp),
                                     tint = pttTint,
                                 )
                                 Text(
                                     stringResource(R.string.ptt),
                                     style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
                                     color = pttTint,
                                 )
                             }
                         }
                     } else {
-                        // Voice activity mode: click to mute and go back to PTT
+                        // VAD mode: glows green when speaking
+                        val vadColor = if (isVoiceActive) Color(0xFF2E7D32) else MaterialTheme.colorScheme.surfaceVariant
+                        val vadTint = if (isVoiceActive) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+
                         Box(
                             modifier = Modifier
-                                .size(72.dp)
+                                .size(76.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .background(vadColor)
+                                .border(
+                                    width = if (isVoiceActive) 3.dp else 1.dp,
+                                    color = if (isVoiceActive) Color(0xFF81C784) else MaterialTheme.colorScheme.outlineVariant,
+                                    shape = CircleShape,
+                                )
                                 .clickable { viewModel.toggleVoiceMode() },
                             contentAlignment = Alignment.Center,
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
-                                    Icons.Default.MicOff,
-                                    contentDescription = stringResource(R.string.mute_mic),
-                                    modifier = Modifier.size(28.dp),
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    Icons.Default.Mic,
+                                    contentDescription = stringResource(R.string.mode_vad),
+                                    modifier = Modifier.size(30.dp),
+                                    tint = vadTint,
                                 )
                                 Text(
-                                    stringResource(R.string.mute),
+                                    "VAD",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontWeight = FontWeight.Bold,
+                                    color = vadTint,
                                 )
                             }
                         }
                     }
 
-                    // Toggle voice mode (PTT ↔ Voice Activity)
-                    IconButton(onClick = { viewModel.toggleVoiceMode() }) {
+                    // Right: Quick Mode Switch Button (PTT <-> VAD)
+                    IconButton(
+                        onClick = { viewModel.toggleVoiceMode() },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                    ) {
                         Icon(
                             if (isPttMode) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = stringResource(if (isPttMode) R.string.unmute_mic else R.string.mute_mic),
-                            tint = if (isPttMode) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.primary,
+                            contentDescription = stringResource(R.string.transmission_mode),
+                            tint = if (isPttMode) MaterialTheme.colorScheme.secondary else Color(0xFF4CAF50),
                         )
                     }
                 }
@@ -303,16 +393,11 @@ fun ServerScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // Channel tree — full screen
             ChannelTree(
                 channels = channels,
                 users = users,
                 onChannelClick = { channelId -> viewModel.moveToChannel(channelId) },
-                onUserClick = { user ->
-                    pmTargetId = user.id
-                    chatTab = 1
-                    chatOpen = true
-                },
+                onUserClick = { user -> selectedUserForDetails = user },
                 channelIcons = channelIcons,
                 userAvatars = userAvatars,
                 modifier = Modifier
@@ -320,7 +405,7 @@ fun ServerScreen(
                     .padding(horizontal = 8.dp),
             )
 
-            // File manager — slides up from bottom, fills content area
+            // File manager slide-up
             val fileManagerProgress by animateFloatAsState(
                 targetValue = if (fileManagerOpen) 0f else 1f,
                 animationSpec = tween(300),
@@ -348,8 +433,8 @@ fun ServerScreen(
                         onUploadFile = { name, data -> viewModel.uploadFileToChannel(name, data) },
                         onShareFile = { target, name, size ->
                             when (target) {
-                                is ShareTarget.Channel -> viewModel.shareFile(null, name, size)
-                                is ShareTarget.PrivateMessage -> viewModel.shareFile(target.userId, name, size)
+                                is ShareTarget.Channel -> viewModel.shareFileInChat(name, size, isPrivate = false, targetId = null)
+                                is ShareTarget.PrivateMessage -> viewModel.shareFileInChat(name, size, isPrivate = true, targetId = target.userId)
                             }
                         },
                         onDismiss = { viewModel.closeFileManager() },
@@ -357,15 +442,16 @@ fun ServerScreen(
                 }
             }
 
-            // Chat panel — slides up from bottom, fills content area
-            // Once opened, stay composed so re-opening is instant (no recomposition)
-            if (chatOpen) chatEverOpened = true
+            // Chat slide-up panel
             val chatProgress by animateFloatAsState(
                 targetValue = if (chatOpen) 0f else 1f,
                 animationSpec = tween(300),
-                label = "chat",
+                label = "chatSlide",
             )
-            if (chatEverOpened) {
+
+            if (chatOpen) chatEverOpened = true
+
+            if (chatEverOpened && (chatOpen || chatProgress < 1f)) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -374,34 +460,29 @@ fun ServerScreen(
                     ChatPanel(
                         chatTab = chatTab,
                         onTabChange = { chatTab = it },
-                        channelMessages = channelMessages,
-                        privateMessages = pmTargetId?.let { id ->
-                            privateMessages[id] ?: emptyList()
-                        } ?: privateMessages.values.flatten().sortedBy { it.timestamp },
-                        messageText = messageText,
-                        onMessageChange = { messageText = it },
-                        pmTarget = pmTarget,
-                        pmConversationUsers = pmConversationUsers,
-                        onSelectPmUser = { userId -> pmTargetId = userId },
-                        onClearPmTarget = { pmTargetId = null },
-                        onSend = {
-                            when (chatTab) {
-                                0 -> viewModel.sendChannelMessage(messageText)
-                                1 -> pmTargetId?.let { viewModel.sendPrivateMessage(it, messageText) }
-                            }
-                            messageText = ""
-                        },
-                        onClose = { chatOpen = false },
                         unreadChannel = unreadChannel,
-                        unreadPrivateTotal = totalUnreadPrivate,
-                        unreadPrivatePerUser = unreadPrivate,
+                        unreadPrivate = totalUnreadPrivate,
+                        pmConversationUsers = pmConversationUsers,
+                        pmTargetId = pmTargetId,
+                        onPmTargetChange = { pmTargetId = it },
+                        unreadPrivateMap = unreadPrivate,
+                        channelMessages = channelMessages,
+                        privateMessages = privateMessages,
                         showLinkThumbnails = showLinkThumbnails,
                         autoLoadImages = autoLoadImages,
-                        canUploadFiles = (channelPermissions and dev.tslib.Channel.PERM_FILE_UPLOAD) != 0L,
-                        onUploadFile = { fileName, data ->
-                            viewModel.uploadAndSendFile(fileName, data, chatTab == 1, pmTargetId)
+                        onDownloadAttachment = { attachment -> viewModel.downloadAttachment(attachment) },
+                        messageText = messageText,
+                        onMessageChange = { messageText = it },
+                        onSend = {
+                            if (chatTab == 0) viewModel.sendChannelMessage(messageText)
+                            else pmTarget?.let { viewModel.sendPrivateMessage(it.id, messageText) }
+                            messageText = ""
                         },
-                        onDownload = { attachment -> viewModel.downloadAttachment(attachment) },
+                        pmTarget = pmTarget,
+                        onUploadFile = { fileName, data ->
+                            viewModel.uploadAndSendFile(fileName, data, isPrivate = chatTab == 1, targetId = pmTarget?.id)
+                        },
+                        onClose = { chatOpen = false },
                     )
                 }
             }
@@ -411,57 +492,395 @@ fun ServerScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChatPanel(
-    chatTab: Int,
-    onTabChange: (Int) -> Unit,
-    channelMessages: List<ChatMessage>,
-    privateMessages: List<ChatMessage>,
-    messageText: String,
-    onMessageChange: (String) -> Unit,
-    pmTarget: User?,
-    pmConversationUsers: List<Pair<Int, String>>,
-    onSelectPmUser: (Int) -> Unit,
-    onClearPmTarget: () -> Unit,
-    onSend: () -> Unit,
-    onClose: () -> Unit,
-    unreadChannel: Int,
-    unreadPrivateTotal: Int,
-    unreadPrivatePerUser: Map<Int, Int>,
-    showLinkThumbnails: Boolean,
-    autoLoadImages: Boolean = true,
-    canUploadFiles: Boolean = true,
-    onUploadFile: (String, ByteArray) -> Unit = { _, _ -> },
-    onDownload: ((FileAttachment) -> StateFlow<DownloadState>)? = null,
+private fun UserDetailBottomSheet(
+    user: User,
+    avatar: ImageBitmap?,
+    currentVolume: Float,
+    onVolumeChange: (Float) -> Unit,
+    onSendPm: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        try {
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
-            val nameIndex = cursor?.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME) ?: -1
-            cursor?.moveToFirst()
-            val fileName = if (nameIndex >= 0) cursor?.getString(nameIndex) ?: "file" else "file"
-            cursor?.close()
-            val data = context.contentResolver.openInputStream(uri)?.readBytes() ?: return@rememberLauncherForActivityResult
-            if (data.size > 10_485_760) return@rememberLauncherForActivityResult // 10MB max
-            onUploadFile(fileName, data)
-        } catch (_: Exception) {}
-    }
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        tonalElevation = 3.dp,
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .navigationBarsPadding()
-                .padding(8.dp),
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Header: tabs + close
+            Box(
+                modifier = Modifier
+                    .size(68.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (avatar != null) {
+                    Image(
+                        bitmap = avatar,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Text(
+                        text = user.nickname.firstOrNull()?.uppercase() ?: "?",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = user.nickname,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+
             Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                if (user.isAway) {
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(stringResource(R.string.status_away)) },
+                        leadingIcon = {
+                            Icon(Icons.Default.NightsStay, contentDescription = null, modifier = Modifier.size(16.dp))
+                        }
+                    )
+                }
+                if (user.isInputMuted) {
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(stringResource(R.string.status_muted)) },
+                        leadingIcon = {
+                            Icon(Icons.Default.MicOff, contentDescription = null, modifier = Modifier.size(16.dp))
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Volume control card
+            Card(
                 modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.user_volume),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(R.string.user_volume_percent, (currentVolume * 100).toInt()),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    Slider(
+                        value = currentVolume,
+                        onValueChange = onVolumeChange,
+                        valueRange = 0.0f..2.0f,
+                        steps = 19,
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(
+                            onClick = {
+                                if (currentVolume == 0f) onVolumeChange(1.0f)
+                                else onVolumeChange(0.0f)
+                            }
+                        ) {
+                            Icon(
+                                if (currentVolume == 0f) Icons.Default.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (currentVolume == 0f) stringResource(R.string.notif_unmute) else stringResource(R.string.mute_user))
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Button(
+                onClick = onSendPm,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Icon(Icons.Default.ChatBubble, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.send_private_message))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsDialog(
+    isPttMode: Boolean,
+    onPttModeChange: (Boolean) -> Unit,
+    vadThreshold: Float,
+    onVadThresholdChange: (Float) -> Unit,
+    micLevel: Float,
+    noiseSuppressionEnabled: Boolean,
+    onNoiseSuppressionChange: (Boolean) -> Unit,
+    echoCancellationEnabled: Boolean,
+    onEchoCancellationChange: (Boolean) -> Unit,
+    currentGain: Float,
+    onGainChange: (Float) -> Unit,
+    showLinkThumbnails: Boolean,
+    onShowLinkThumbnailsChange: (Boolean) -> Unit,
+    autoLoadImages: Boolean,
+    onAutoLoadImagesChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var gainSlider by remember(currentGain) { mutableFloatStateOf(currentGain) }
+    var vadSlider by remember(vadThreshold) { mutableFloatStateOf(vadThreshold) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                // Section: Voice Transmission Mode
+                Text(
+                    text = stringResource(R.string.transmission_mode),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = isPttMode,
+                        onClick = { onPttModeChange(true) },
+                        label = { Text("PTT") },
+                        leadingIcon = { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterChip(
+                        selected = !isPttMode,
+                        onClick = { onPttModeChange(false) },
+                        label = { Text("VAD") },
+                        leadingIcon = { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // VAD Sensitivity & Live Level Bar
+                Text(
+                    text = "${stringResource(R.string.vad_sensitivity)}: ${(vadSlider * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+
+                // Canvas showing live mic volume bar with vertical threshold marker
+                val trackColor = MaterialTheme.colorScheme.surfaceVariant
+                val primaryColor = MaterialTheme.colorScheme.primary
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(6.dp)),
+                ) {
+                    drawRect(color = trackColor)
+                    val levelW = size.width * micLevel.coerceIn(0f, 1f)
+                    val activeColor = if (micLevel >= vadSlider) Color(0xFF4CAF50) else primaryColor
+                    drawRect(color = activeColor, size = Size(levelW, size.height))
+                    val thresholdX = size.width * vadSlider.coerceIn(0f, 1f)
+                    drawLine(
+                        color = Color(0xFFFF5252),
+                        start = Offset(thresholdX, 0f),
+                        end = Offset(thresholdX, size.height),
+                        strokeWidth = 3.dp.toPx(),
+                    )
+                }
+
+                Slider(
+                    value = vadSlider,
+                    onValueChange = { vadSlider = it },
+                    onValueChangeFinished = { onVadThresholdChange(vadSlider) },
+                    valueRange = 0.05f..0.95f,
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Section: Audio Processing (AEC & NS)
+                Text(
+                    text = stringResource(R.string.audio_settings),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.echo_cancellation),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = echoCancellationEnabled,
+                        onCheckedChange = onEchoCancellationChange,
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.noise_suppression),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = noiseSuppressionEnabled,
+                        onCheckedChange = onNoiseSuppressionChange,
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = "${stringResource(R.string.audio_gain)}: ${stringResource(R.string.audio_gain_value, gainSlider)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Slider(
+                    value = gainSlider,
+                    onValueChange = { gainSlider = it },
+                    onValueChangeFinished = { onGainChange(gainSlider) },
+                    valueRange = 1.0f..8.0f,
+                    steps = 13,
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Section: General Media Settings
+                Text(
+                    text = stringResource(R.string.general_settings),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.show_link_thumbnails),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = showLinkThumbnails,
+                        onCheckedChange = onShowLinkThumbnailsChange,
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.auto_load_images),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = autoLoadImages,
+                        onCheckedChange = onAutoLoadImagesChange,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.close))
+            }
+        },
+    )
+}
+
+@Composable
+private fun ChatPanel(
+    chatTab: Int,
+    onTabChange: (Int) -> Unit,
+    unreadChannel: Int,
+    unreadPrivate: Int,
+    pmConversationUsers: List<Pair<Int, String>>,
+    pmTargetId: Int?,
+    onPmTargetChange: (Int) -> Unit,
+    unreadPrivateMap: Map<Int, Int>,
+    channelMessages: List<ChatMessage>,
+    privateMessages: Map<Int, List<ChatMessage>>,
+    showLinkThumbnails: Boolean,
+    autoLoadImages: Boolean,
+    onDownloadAttachment: (FileAttachment) -> StateFlow<DownloadState>,
+    messageText: String,
+    onMessageChange: (String) -> Unit,
+    onSend: () -> Unit,
+    pmTarget: User?,
+    onUploadFile: (String, ByteArray) -> Unit,
+    onClose: () -> Unit,
+) {
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            // Handled via context
+        }
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TabRow(
@@ -487,9 +906,9 @@ private fun ChatPanel(
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(stringResource(R.string.tab_private))
-                                if (unreadPrivateTotal > 0) {
+                                if (unreadPrivate > 0) {
                                     Spacer(Modifier.width(4.dp))
-                                    Badge { Text("$unreadPrivateTotal") }
+                                    Badge { Text("$unreadPrivate") }
                                 }
                             }
                         },
@@ -500,84 +919,56 @@ private fun ChatPanel(
                 }
             }
 
-            // PM conversation selector
-            if (chatTab == 1 && pmConversationUsers.isNotEmpty()) {
+            if (chatTab == 1) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // "All" chip
-                    FilterChip(
-                        selected = pmTarget == null,
-                        onClick = { onClearPmTarget() },
-                        label = { Text(stringResource(R.string.filter_all)) },
-                        leadingIcon = if (pmTarget == null) {
-                            { Icon(Icons.Default.ChatBubble, null, Modifier.size(16.dp)) }
-                        } else null,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        ),
-                    )
-                    // One chip per conversation user
-                    pmConversationUsers.forEach { (userId, nickname) ->
-                        val isSelected = pmTarget?.id == userId
-                        val userUnread = unreadPrivatePerUser[userId] ?: 0
+                    for ((userId, name) in pmConversationUsers) {
+                        val unread = unreadPrivateMap[userId] ?: 0
                         FilterChip(
-                            selected = isSelected,
-                            onClick = { onSelectPmUser(userId) },
+                            selected = pmTargetId == userId,
+                            onClick = { onPmTargetChange(userId) },
                             label = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(nickname)
-                                    if (userUnread > 0) {
+                                    Text(name)
+                                    if (unread > 0) {
                                         Spacer(Modifier.width(4.dp))
-                                        Badge { Text("$userUnread") }
+                                        Badge { Text("$unread") }
                                     }
                                 }
                             },
-                            leadingIcon = if (isSelected) {
-                                { Icon(Icons.Default.Person, null, Modifier.size(16.dp)) }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            ),
                         )
                     }
                 }
             }
 
-            // Messages
-            val messages = when (chatTab) {
-                0 -> channelMessages
-                1 -> privateMessages
-                else -> emptyList()
+            val messages = if (chatTab == 0) channelMessages
+            else pmTargetId?.let { privateMessages[it] } ?: emptyList()
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                ChatView(
+                    messages = messages,
+                    showLinkThumbnails = showLinkThumbnails,
+                    autoLoadImages = autoLoadImages,
+                    onDownload = onDownloadAttachment,
+                )
             }
-            ChatView(
-                messages = messages,
-                showLinkThumbnails = showLinkThumbnails,
-                autoLoadImages = autoLoadImages,
-                onDownload = onDownload,
+
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-            )
-
-            // Message input
-            Row(
-                modifier = Modifier.fillMaxWidth(),
+                    .imePadding()
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                if (canUploadFiles) {
-                    IconButton(
-                        onClick = { filePickerLauncher.launch("*/*") },
-                        enabled = chatTab == 0 || pmTarget != null,
-                    ) {
-                        Icon(Icons.Default.AttachFile, contentDescription = stringResource(R.string.attach_file))
-                    }
-                }
                 OutlinedTextField(
                     value = messageText,
                     onValueChange = onMessageChange,
@@ -589,84 +980,17 @@ private fun ChatPanel(
                         )
                     },
                     singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
                     enabled = chatTab == 0 || pmTarget != null,
                 )
+                Spacer(Modifier.width(4.dp))
                 IconButton(
                     onClick = onSend,
                     enabled = messageText.isNotBlank() && (chatTab == 0 || pmTarget != null),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send))
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send), tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
     }
-}
-
-@Composable
-private fun SettingsDialog(
-    currentGain: Float,
-    onGainChange: (Float) -> Unit,
-    showLinkThumbnails: Boolean,
-    onShowLinkThumbnailsChange: (Boolean) -> Unit,
-    autoLoadImages: Boolean,
-    onAutoLoadImagesChange: (Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var sliderValue by remember(currentGain) { mutableFloatStateOf(currentGain) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings)) },
-        text = {
-            Column {
-                Text(
-                    text = "${stringResource(R.string.audio_gain)} : ${stringResource(R.string.audio_gain_value, sliderValue)}",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Spacer(Modifier.height(8.dp))
-                Slider(
-                    value = sliderValue,
-                    onValueChange = { sliderValue = it },
-                    onValueChangeFinished = { onGainChange(sliderValue) },
-                    valueRange = 1.0f..8.0f,
-                    steps = 13, // (8-1)/0.5 - 1 = 13 intermediate steps
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.show_link_thumbnails),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = showLinkThumbnails,
-                        onCheckedChange = onShowLinkThumbnailsChange,
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.auto_load_images),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = autoLoadImages,
-                        onCheckedChange = onAutoLoadImagesChange,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.close))
-            }
-        },
-    )
 }

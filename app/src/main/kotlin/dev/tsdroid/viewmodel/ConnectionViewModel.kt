@@ -122,11 +122,15 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
                 viewModelScope.launch {
                     try {
                         val identity = getOrCreateIdentity()
-                        val pw = password.value.trim().takeIf { it.isNotEmpty() }
-                        val ch = channel.value.trim().takeIf { it.isNotEmpty() }
-                        binder.tsClient.connect(addr, identity, nick, pw, ch)
-                        _connectionState.value = ConnectionState.CONNECTED
-                        onConnected()
+                        try {
+                            val pw = password.value.trim().takeIf { it.isNotEmpty() }
+                            val ch = channel.value.trim().takeIf { it.isNotEmpty() }
+                            binder.tsClient.connect(addr, identity, nick, pw, ch)
+                            _connectionState.value = ConnectionState.CONNECTED
+                            onConnected()
+                        } finally {
+                            try { identity.close() } catch (_: Exception) {}
+                        }
                     } catch (e: Exception) {
                         _connectionState.value = ConnectionState.DISCONNECTED
                         _error.value = e.message ?: getApplication<Application>().getString(R.string.connection_failed)
@@ -234,29 +238,33 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
             try {
                 val channels = withContext(Dispatchers.IO) {
                     val identity = getOrCreateIdentity()
-                    val pw = password.value.trim().takeIf { it.isNotEmpty() }
-                    val client = Client(addr, identity, nick, pw, null)
                     try {
-                        client.waitConnected()
-                        // Pump events until channels are available (or timeout)
-                        val deadline = System.currentTimeMillis() + 5000
-                        while (System.currentTimeMillis() < deadline) {
-                            client.processEvents()
-                            val raw = client.channels
-                            if (raw != null && raw.isNotEmpty()) break
-                            Thread.sleep(20)
+                        val pw = password.value.trim().takeIf { it.isNotEmpty() }
+                        val client = Client(addr, identity, nick, pw, null)
+                        try {
+                            client.waitConnected()
+                            // Pump events until channels are available (or timeout)
+                            val deadline = System.currentTimeMillis() + 5000
+                            while (System.currentTimeMillis() < deadline) {
+                                client.processEvents()
+                                val raw = client.channels
+                                if (raw != null && raw.isNotEmpty()) break
+                                Thread.sleep(20)
+                            }
+                            val ch = client.channels?.filterNotNull() ?: emptyList()
+                            // Disconnect + flush
+                            client.disconnect()
+                            val flushEnd = System.currentTimeMillis() + 500
+                            while (System.currentTimeMillis() < flushEnd) {
+                                client.processEvents()
+                                Thread.sleep(20)
+                            }
+                            ch
+                        } finally {
+                            client.close()
                         }
-                        val ch = client.channels?.filterNotNull() ?: emptyList()
-                        // Disconnect + flush
-                        client.disconnect()
-                        val flushEnd = System.currentTimeMillis() + 500
-                        while (System.currentTimeMillis() < flushEnd) {
-                            client.processEvents()
-                            Thread.sleep(20)
-                        }
-                        ch
                     } finally {
-                        client.close()
+                        try { identity.close() } catch (_: Exception) {}
                     }
                 }
                 browsedChannels.value = channels

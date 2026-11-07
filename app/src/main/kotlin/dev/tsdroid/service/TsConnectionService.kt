@@ -29,8 +29,8 @@ class TsConnectionService : Service() {
     companion object {
         private const val TAG = "TsConnService"
         private const val NOTIFICATION_ID = 1
-        private const val ACTION_DISCONNECT = "com.flammedemon.ts6droid.DISCONNECT"
-        private const val ACTION_TOGGLE_MUTE = "com.flammedemon.ts6droid.TOGGLE_MUTE"
+        private const val ACTION_DISCONNECT = "org.nearcorp.opents.DISCONNECT"
+        private const val ACTION_TOGGLE_MUTE = "org.nearcorp.opents.TOGGLE_MUTE"
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, TsConnectionService::class.java))

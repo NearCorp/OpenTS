@@ -11,7 +11,7 @@ class FileCache(private val context: Context) {
 
     companion object {
         private const val TAG = "FileCache"
-        private const val BASE_FOLDER = "TS6 Droid"
+        private const val BASE_FOLDER = "OpenTS"
     }
 
     private val contentResolver = context.contentResolver

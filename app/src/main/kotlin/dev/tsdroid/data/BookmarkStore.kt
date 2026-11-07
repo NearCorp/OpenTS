@@ -94,25 +94,20 @@ class BookmarkStore(private val context: Context) {
         }
     }
 
-    private fun parseBookmarks(json: String): List<ServerBookmark> {
-        if (json == "[]") return emptyList()
+    private fun parseBookmarks(jsonStr: String): List<ServerBookmark> {
+        if (jsonStr.isBlank() || jsonStr == "[]") return emptyList()
         return try {
-            val entries = json.removeSurrounding("[", "]").split("},{")
-            entries.map { entry ->
-                val clean = entry.removePrefix("{").removeSuffix("}")
-                val fields = mutableMapOf<String, String>()
-                for (pair in clean.split("\",\"")) {
-                    val kv = pair.replace("\"", "").split(":", limit = 2)
-                    if (kv.size == 2) fields[kv[0]] = kv[1]
-                }
+            val array = org.json.JSONArray(jsonStr)
+            (0 until array.length()).mapNotNull { i ->
+                val obj = array.optJSONObject(i) ?: return@mapNotNull null
                 ServerBookmark(
-                    name = fields["name"] ?: "",
-                    address = fields["address"] ?: "",
-                    nickname = fields["nickname"] ?: "",
-                    password = fields["password"]?.takeIf { it != "null" },
-                    channel = fields["channel"]?.takeIf { it != "null" },
-                    serverName = fields["serverName"]?.takeIf { it != "null" },
-                    iconId = fields["iconId"]?.toLongOrNull() ?: 0,
+                    name = obj.optString("name", ""),
+                    address = obj.optString("address", ""),
+                    nickname = obj.optString("nickname", ""),
+                    password = if (obj.isNull("password") || obj.optString("password") == "null") null else obj.optString("password").takeIf { it.isNotEmpty() },
+                    channel = if (obj.isNull("channel") || obj.optString("channel") == "null") null else obj.optString("channel").takeIf { it.isNotEmpty() },
+                    serverName = if (obj.isNull("serverName") || obj.optString("serverName") == "null") null else obj.optString("serverName").takeIf { it.isNotEmpty() },
+                    iconId = obj.optLong("iconId", 0L),
                 )
             }
         } catch (_: Exception) {
@@ -121,10 +116,18 @@ class BookmarkStore(private val context: Context) {
     }
 
     private fun serializeBookmarks(bookmarks: List<ServerBookmark>): String {
-        return bookmarks.joinToString(",", "[", "]") { b ->
-            """{"name":"${escape(b.name)}","address":"${escape(b.address)}","nickname":"${escape(b.nickname)}","password":"${b.password ?: "null"}","channel":"${b.channel ?: "null"}","serverName":"${b.serverName ?: "null"}","iconId":"${b.iconId}"}"""
+        val array = org.json.JSONArray()
+        for (b in bookmarks) {
+            val obj = org.json.JSONObject()
+            obj.put("name", b.name)
+            obj.put("address", b.address)
+            obj.put("nickname", b.nickname)
+            if (b.password != null) obj.put("password", b.password)
+            if (b.channel != null) obj.put("channel", b.channel)
+            if (b.serverName != null) obj.put("serverName", b.serverName)
+            obj.put("iconId", b.iconId)
+            array.put(obj)
         }
+        return array.toString()
     }
-
-    private fun escape(s: String): String = s.replace("\"", "\\\"")
 }

@@ -54,6 +54,7 @@ data class FileAttachment(
 )
 
 data class ChatMessage(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val sender: String,
     val text: String,
     val timestamp: Long = System.currentTimeMillis(),
@@ -119,9 +120,26 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private val _privateMessages = MutableStateFlow<Map<Int, List<ChatMessage>>>(emptyMap())
     val privateMessages: StateFlow<Map<Int, List<ChatMessage>>> = _privateMessages.asStateFlow()
 
-    // Separate PTT mode from actual mute state
-    private val _isPttMode = MutableStateFlow(true) // true = PTT, false = voice activity
-    val isPttMode: StateFlow<Boolean> = _isPttMode.asStateFlow()
+    val isPttMode: StateFlow<Boolean> = settingsStore.isPttMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val vadThreshold: StateFlow<Float> = settingsStore.vadThreshold
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0.25f)
+
+    val noiseSuppressionEnabled: StateFlow<Boolean> = settingsStore.noiseSuppressionEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val echoCancellationEnabled: StateFlow<Boolean> = settingsStore.echoCancellationEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    private val _micLevel = MutableStateFlow(0f)
+    val micLevel: StateFlow<Float> = _micLevel.asStateFlow()
+
+    private val _isVoiceActive = MutableStateFlow(false)
+    val isVoiceActive: StateFlow<Boolean> = _isVoiceActive.asStateFlow()
+
+    private val _userVolumes = MutableStateFlow<Map<Int, Float>>(emptyMap())
+    val userVolumes: StateFlow<Map<Int, Float>> = _userVolumes.asStateFlow()
 
     private val _connectionState = MutableStateFlow(ConnectionState.CONNECTED)
     val connectionState: StateFlow<Int> = _connectionState.asStateFlow()
@@ -279,8 +297,25 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 if (!binder.audioBridge.isCapturing.value) {
                     binder.audioBridge.startCapture(viewModelScope)
                 }
-                // Apply persisted audio gain
+                // Apply persisted audio settings
                 binder.audioBridge.gainFactor = audioGain.value
+                binder.audioBridge.isVoiceActivationMode = !isPttMode.value
+                binder.audioBridge.vadThreshold = vadThreshold.value
+                binder.audioBridge.isNsEnabled = noiseSuppressionEnabled.value
+                binder.audioBridge.isAecEnabled = echoCancellationEnabled.value
+
+                // Restore individual user volumes
+                _userVolumes.value.forEach { (userId, vol) ->
+                    binder.audioBridge.setUserVolume(userId, vol)
+                }
+
+                viewModelScope.launch {
+                    binder.audioBridge.micLevel.collect { _micLevel.value = it }
+                }
+                viewModelScope.launch {
+                    binder.audioBridge.isVoiceActive.collect { _isVoiceActive.value = it }
+                }
+
                 // Start event loop (guarded by AtomicBoolean — safe if already running)
                 viewModelScope.launch {
                     binder.tsClient.eventLoop()
@@ -502,16 +537,50 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch { settingsStore.setAutoLoadImages(enabled) }
     }
 
-    fun toggleVoiceMode() {
-        val newPttMode = !_isPttMode.value
-        _isPttMode.value = newPttMode
-        // When switching to PTT mode, mute. When switching to VA, unmute.
-        audioBridge?.setMuted(newPttMode)
+    fun setIsPttMode(isPtt: Boolean) {
+        viewModelScope.launch { settingsStore.setIsPttMode(isPtt) }
+        audioBridge?.let {
+            it.isVoiceActivationMode = !isPtt
+            if (isPtt) {
+                it.setMuted(true)
+            } else {
+                it.setMuted(false)
+            }
+        }
     }
 
+    fun toggleVoiceMode() {
+        setIsPttMode(!isPttMode.value)
+    }
+
+    fun setVadThreshold(threshold: Float) {
+        audioBridge?.vadThreshold = threshold
+        viewModelScope.launch { settingsStore.setVadThreshold(threshold) }
+    }
+
+    fun setNoiseSuppressionEnabled(enabled: Boolean) {
+        audioBridge?.isNsEnabled = enabled
+        viewModelScope.launch { settingsStore.setNoiseSuppressionEnabled(enabled) }
+    }
+
+    fun setEchoCancellationEnabled(enabled: Boolean) {
+        audioBridge?.isAecEnabled = enabled
+        viewModelScope.launch { settingsStore.setEchoCancellationEnabled(enabled) }
+    }
+
+    fun setUserVolume(userId: Int, volume: Float) {
+        val map = _userVolumes.value.toMutableMap()
+        map[userId] = volume
+        _userVolumes.value = map
+        audioBridge?.setUserVolume(userId, volume)
+    }
+
+    fun getUserVolume(userId: Int): Float = _userVolumes.value[userId] ?: 1.0f
+
     fun setPushToTalk(pressed: Boolean) {
-        // Only changes mute state, NOT isPttMode — avoids UI recomposition swap
-        audioBridge?.setMuted(!pressed)
+        if (isPttMode.value) {
+            audioBridge?.setMuted(!pressed)
+        }
     }
 
     private fun currentChannelId(): Long {

@@ -9,6 +9,9 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
+import android.util.Log
 import androidx.core.content.ContextCompat
 import dev.tslib.AudioConfig
 import dev.tslib.OpusCodec
@@ -26,18 +29,21 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.sqrt
 
 class AudioBridge(
     private val context: Context,
     private val tsClient: TsClient,
 ) {
     companion object {
+        private const val TAG = "AudioBridge"
         const val SAMPLE_RATE = 48000
         const val CODEC_OPUS_VOICE = 4
         private const val FRAME_SIZE_MS = 20
         private const val FRAME_SIZE_SAMPLES = SAMPLE_RATE * FRAME_SIZE_MS / 1000 // 960
         private const val FRAME_SIZE_BYTES = FRAME_SIZE_SAMPLES * 2 // 16-bit PCM = 2 bytes/sample
         private const val MAX_QUEUE_FRAMES = 10 // Max buffered frames per user
+        private const val HANGOVER_FRAMES = 15 // 15 * 20ms = 300ms hangover for smooth speech
     }
 
     private val audioConfig = AudioConfig()
@@ -48,9 +54,28 @@ class AudioBridge(
     // Per-user decoders and raw opus queues for playback mixing
     private val userDecoders = ConcurrentHashMap<Int, OpusCodec>()
     private val userQueues = ConcurrentHashMap<Int, ArrayDeque<ByteArray>>()
+    private val userVolumes = ConcurrentHashMap<Int, Float>()
 
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
+
+    // Hardware Audio Effects
+    private var aec: AcousticEchoCanceler? = null
+    private var ns: NoiseSuppressor? = null
+
+    @Volatile
+    var isAecEnabled: Boolean = true
+        set(value) {
+            field = value
+            try { aec?.enabled = value } catch (_: Exception) {}
+        }
+
+    @Volatile
+    var isNsEnabled: Boolean = true
+        set(value) {
+            field = value
+            try { ns?.enabled = value } catch (_: Exception) {}
+        }
 
     private var captureJob: Job? = null
     private var playbackJob: Job? = null
@@ -64,11 +89,25 @@ class AudioBridge(
     @Volatile
     var gainFactor: Float = 1.0f
 
+    @Volatile
+    var isVoiceActivationMode: Boolean = false
+
+    @Volatile
+    var vadThreshold: Float = 0.25f
+
     private val _isMuted = MutableStateFlow(true) // Start muted (PTT default)
     val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
 
     private val _isCapturing = MutableStateFlow(false)
     val isCapturing: StateFlow<Boolean> = _isCapturing.asStateFlow()
+
+    // Real-time microphone input level (0.0 to 1.0)
+    private val _micLevel = MutableStateFlow(0f)
+    val micLevel: StateFlow<Float> = _micLevel.asStateFlow()
+
+    // Whether audio is currently being transmitted
+    private val _isVoiceActive = MutableStateFlow(false)
+    val isVoiceActive: StateFlow<Boolean> = _isVoiceActive.asStateFlow()
 
     fun initialize() {
         encoder = OpusCodec(audioConfig)
@@ -88,36 +127,113 @@ class AudioBridge(
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
-        audioRecord = AudioRecord(
+        val record = AudioRecord(
             MediaRecorder.AudioSource.VOICE_COMMUNICATION,
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
             maxOf(minBuf, FRAME_SIZE_BYTES * 4),
         )
-        audioRecord?.startRecording()
+        audioRecord = record
+
+        // Attach hardware audio effects if supported
+        initAudioEffects(record.audioSessionId)
+
+        record.startRecording()
         _isCapturing.value = true
 
         captureJob = scope.launch(Dispatchers.IO) {
             val buffer = ShortArray(FRAME_SIZE_SAMPLES)
             val codec = encoder ?: return@launch
+            var hangoverRemaining = 0
+
             while (isActive && _isCapturing.value) {
                 val read = audioRecord?.read(buffer, 0, FRAME_SIZE_SAMPLES) ?: break
-                if (read == FRAME_SIZE_SAMPLES && !_isMuted.value) {
-                    val pcmBytes = shortsToBytes(buffer)
-                    try {
-                        val encoded = codec.encode(pcmBytes)
-                        tsClient.sendAudio(encoded, CODEC_OPUS_VOICE)
-                    } catch (_: Exception) {}
+                if (read == FRAME_SIZE_SAMPLES) {
+                    // Compute RMS energy
+                    var sumSquares = 0.0
+                    for (i in 0 until read) {
+                        val s = buffer[i].toDouble()
+                        sumSquares += s * s
+                    }
+                    val rms = sqrt(sumSquares / read)
+                    val normalizedLevel = (rms / 32768.0).coerceIn(0.0, 1.0).toFloat()
+                    _micLevel.value = normalizedLevel
+
+                    // Determine transmission state
+                    val shouldTransmit: Boolean
+                    if (isVoiceActivationMode) {
+                        if (normalizedLevel >= vadThreshold) {
+                            hangoverRemaining = HANGOVER_FRAMES
+                        } else if (hangoverRemaining > 0) {
+                            hangoverRemaining--
+                        }
+                        val isVAdDetected = hangoverRemaining > 0
+                        shouldTransmit = !_isMuted.value && isVAdDetected
+                    } else {
+                        // PTT mode: transmit whenever unmuted (button pressed)
+                        shouldTransmit = !_isMuted.value
+                    }
+
+                    if (_isVoiceActive.value != shouldTransmit) {
+                        _isVoiceActive.value = shouldTransmit
+                        tsClient.setInputMuted(!shouldTransmit)
+                    }
+
+                    if (shouldTransmit) {
+                        val pcmBytes = shortsToBytes(buffer)
+                        try {
+                            val encoded = codec.encode(pcmBytes)
+                            tsClient.sendAudio(encoded, CODEC_OPUS_VOICE)
+                        } catch (_: Exception) {}
+                    }
                 }
             }
         }
     }
 
+    private fun initAudioEffects(audioSessionId: Int) {
+        try {
+            if (AcousticEchoCanceler.isAvailable()) {
+                aec = AcousticEchoCanceler.create(audioSessionId)?.apply {
+                    enabled = isAecEnabled
+                }
+                Log.i(TAG, "AcousticEchoCanceler initialized: enabled=${aec?.enabled}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to initialize AcousticEchoCanceler", e)
+        }
+
+        try {
+            if (NoiseSuppressor.isAvailable()) {
+                ns = NoiseSuppressor.create(audioSessionId)?.apply {
+                    enabled = isNsEnabled
+                }
+                Log.i(TAG, "NoiseSuppressor initialized: enabled=${ns?.enabled}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to initialize NoiseSuppressor", e)
+        }
+    }
+
+    private fun releaseAudioEffects() {
+        try {
+            aec?.release()
+            aec = null
+        } catch (_: Exception) {}
+        try {
+            ns?.release()
+            ns = null
+        } catch (_: Exception) {}
+    }
+
     fun stopCapture() {
         _isCapturing.value = false
+        _micLevel.value = 0f
+        _isVoiceActive.value = false
         captureJob?.cancel()
         captureJob = null
+        releaseAudioEffects()
         audioRecord?.stop()
         audioRecord?.release()
         audioRecord = null
@@ -150,9 +266,8 @@ class AudioBridge(
     }
 
     /**
-     * Playback loop: decodes one opus frame per user, mixes PCM, writes
-     * one combined frame to AudioTrack. All decoder access is on this
-     * single thread so no synchronization is needed on decoders.
+     * Playback loop: decodes one opus frame per user, applies per-user volume,
+     * mixes PCM, and writes one combined frame to AudioTrack.
      */
     private fun startPlaybackLoop() {
         playbackJob = playbackScope.launch {
@@ -165,14 +280,22 @@ class AudioBridge(
 
                 for ((userId, queue) in userQueues) {
                     val opusData = synchronized(queue) { queue.pollFirst() } ?: continue
+                    val userVol = userVolumes[userId] ?: 1.0f
+                    if (userVol <= 0.001f) {
+                        // User muted individually - skip decoding to save CPU
+                        continue
+                    }
+
                     val decoder = userDecoders.getOrPut(userId) { OpusCodec(audioConfig) }
                     try {
                         val pcmBytes = decoder.decode(opusData)
                         bytesToShorts(pcmBytes, decodeBuffer)
                         hasData = true
-                        // Mix: sum with clipping
+
+                        // Mix: apply individual volume + sum with clipping
                         for (i in mixBuffer.indices) {
-                            val sum = mixBuffer[i].toInt() + decodeBuffer[i].toInt()
+                            val userSample = (decodeBuffer[i] * userVol).toInt()
+                            val sum = mixBuffer[i].toInt() + userSample
                             mixBuffer[i] = sum.coerceIn(
                                 Short.MIN_VALUE.toInt(),
                                 Short.MAX_VALUE.toInt(),
@@ -201,8 +324,7 @@ class AudioBridge(
     }
 
     /**
-     * Queue an opus packet for a specific user. Called from any thread;
-     * decoding happens on the playback thread.
+     * Queue an opus packet for a specific user.
      */
     fun playAudio(userId: Int, opusData: ByteArray) {
         val queue = userQueues.getOrPut(userId) { ArrayDeque() }
@@ -210,19 +332,34 @@ class AudioBridge(
             if (queue.size < MAX_QUEUE_FRAMES) {
                 queue.addLast(opusData)
             }
-            // Drop oldest if queue is full (prevents unbounded lag)
         }
     }
 
+    /**
+     * Set individual volume multiplier for a user (0.0 to 2.0). 0.0 = muted.
+     */
+    fun setUserVolume(userId: Int, volume: Float) {
+        userVolumes[userId] = volume.coerceIn(0.0f, 2.0f)
+    }
+
+    /**
+     * Get individual volume multiplier for a user.
+     */
+    fun getUserVolume(userId: Int): Float = userVolumes[userId] ?: 1.0f
+
     fun setMuted(muted: Boolean) {
         _isMuted.value = muted
-        tsClient.setInputMuted(muted)
+        if (muted) {
+            _isVoiceActive.value = false
+            tsClient.setInputMuted(true)
+        } else if (!isVoiceActivationMode) {
+            _isVoiceActive.value = true
+            tsClient.setInputMuted(false)
+        }
     }
 
     fun toggleMute() {
-        val newState = !_isMuted.value
-        _isMuted.value = newState
-        tsClient.setInputMuted(newState)
+        setMuted(!_isMuted.value)
     }
 
     fun release() {
@@ -235,12 +372,12 @@ class AudioBridge(
         audioTrack = null
         encoder?.close()
         encoder = null
-        // Close per-user decoders
         for (decoder in userDecoders.values) {
             try { decoder.close() } catch (_: Exception) {}
         }
         userDecoders.clear()
         userQueues.clear()
+        userVolumes.clear()
     }
 
     private fun shortsToBytes(shorts: ShortArray): ByteArray {

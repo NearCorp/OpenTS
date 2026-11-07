@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TS6_Droid"
+rootProject.name = "OpenTS"
 include(":app")

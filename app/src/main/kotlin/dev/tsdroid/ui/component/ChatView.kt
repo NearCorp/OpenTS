@@ -68,7 +68,7 @@ fun ChatView(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         reverseLayout = true,
     ) {
-        items(displayMessages, key = { it.timestamp }) { message ->
+        items(displayMessages, key = { it.id }) { message ->
             MessageBubble(
                 message = message,
                 showLinkThumbnails = showLinkThumbnails,

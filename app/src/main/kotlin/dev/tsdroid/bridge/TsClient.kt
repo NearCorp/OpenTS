@@ -8,6 +8,7 @@ import dev.tslib.Event
 import dev.tslib.Identity
 import dev.tslib.ServerInfo
 import dev.tslib.User
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -37,6 +37,7 @@ class TsClient {
         private const val TAG = "TsClient"
     }
 
+    private val nativeLock = Any()
     private var client: Client? = null
     var serverAddress: String? = null
         private set
@@ -66,10 +67,10 @@ class TsClient {
     private val eventLoopRunning = AtomicBoolean(false)
 
     val isConnected: Boolean
-        get() = client?.isConnected == true
+        get() = synchronized(nativeLock) { client?.isConnected == true }
 
     val clientId: Int?
-        get() = client?.clientId
+        get() = synchronized(nativeLock) { client?.clientId }
 
     suspend fun connect(
         address: String,
@@ -80,39 +81,37 @@ class TsClient {
     ) = withContext(Dispatchers.IO) {
         disconnect()
         serverAddress = address
-        val c = Client(address, identity, nickname, password, channel)
-        client = c
-        _state.value = ConnectionState.CONNECTING
-        c.waitConnected()
-        _state.value = ConnectionState.CONNECTED
-        // Log immediately after waitConnected
-        val users = c.users
-        val channels = c.channels
-        Log.i(TAG, "After waitConnected: ${users?.size ?: "null"} users, ${channels?.size ?: "null"} channels")
-        if (users != null) {
-            for (u in users) {
-                if (u != null) Log.d(TAG, "  User: ${u.nickname} (id=${u.id}, ch=${u.channelId})")
-            }
+        val c = synchronized(nativeLock) {
+            val newClient = Client(address, identity, nickname, password, channel)
+            client = newClient
+            _state.value = ConnectionState.CONNECTING
+            newClient.waitConnected()
+            _state.value = ConnectionState.CONNECTED
+            newClient
         }
+        val users = synchronized(nativeLock) { c.users }
+        val channels = synchronized(nativeLock) { c.channels }
+        Log.i(TAG, "After waitConnected: ${users?.size ?: "null"} users, ${channels?.size ?: "null"} channels")
         refreshState()
     }
 
     suspend fun eventLoop() {
-        // Guard: only one event loop runs at a time
         if (!eventLoopRunning.compareAndSet(false, true)) return
         try {
             withContext(Dispatchers.IO) {
                 var refreshCounter = 0
                 while (coroutineContext.isActive && client != null) {
                     try {
-                        val c = client ?: break
-                        val events = c.processEvents() ?: emptyArray()
+                        val events = synchronized(nativeLock) {
+                            val c = client ?: return@synchronized null
+                            c.processEvents()
+                        } ?: emptyArray()
+
                         for (event in events) {
                             _events.tryEmit(event)
                             handleEvent(event)
                         }
                         refreshCounter++
-                        // Refresh on events or every ~500ms (25 * 20ms)
                         if (events.isNotEmpty() || refreshCounter >= 25) {
                             refreshState()
                             refreshCounter = 0
@@ -171,27 +170,25 @@ class TsClient {
                 val channelId = (event.data["channel_id"] as? Number)?.toLong() ?: return
                 val hints = (event.data["permission_hints"] as? Number)?.toLong() ?: return
                 Log.i(TAG, "Channel $channelId permissions updated: ${hints.toString(16)}")
-                // Force refresh to propagate updated permission_hints
                 refreshState()
             }
         }
     }
 
     private fun refreshState() {
-        val c = client ?: return
         try {
-            _channels.value = c.channels?.filterNotNull() ?: emptyList()
-            val rawUsers = c.users
-            val filteredUsers = rawUsers?.filterNotNull() ?: emptyList()
-            Log.d(TAG, "refreshState: rawUsers=${rawUsers?.size}, filtered=${filteredUsers.size}")
-            if (filteredUsers.isNotEmpty()) {
-                for (u in filteredUsers) {
-                    Log.d(TAG, "  user: ${u.nickname} id=${u.id} ch=${u.channelId}")
-                }
-            }
-            _users.value = filteredUsers
-            _serverInfo.value = c.serverInfo
-            val st = c.state
+            val (chs, usrs, srv, st) = synchronized(nativeLock) {
+                val c = client ?: return
+                val channels = c.channels?.filterNotNull() ?: emptyList()
+                val users = c.users?.filterNotNull() ?: emptyList()
+                val sInfo = c.serverInfo
+                val state = c.state
+                Tuple4(channels, users, sInfo, state)
+            } ?: return
+
+            _channels.value = chs
+            _users.value = usrs
+            _serverInfo.value = srv
             if (_state.value != st) _state.value = st
         } catch (e: Exception) {
             Log.w(TAG, "refreshState failed", e)
@@ -199,33 +196,43 @@ class TsClient {
     }
 
     fun sendChannelMessage(msg: String) {
-        client?.sendChannelMessage(msg)
+        synchronized(nativeLock) {
+            client?.sendChannelMessage(msg)
+        }
     }
 
     fun sendServerMessage(msg: String) {
-        client?.sendServerMessage(msg)
+        synchronized(nativeLock) {
+            client?.sendServerMessage(msg)
+        }
     }
 
     fun sendPrivateMessage(userId: Int, msg: String) {
-        client?.sendPrivateMessage(userId, msg)
+        synchronized(nativeLock) {
+            client?.sendPrivateMessage(userId, msg)
+        }
     }
 
     fun moveToChannel(channelId: Long) {
-        client?.moveToChannel(channelId)
+        synchronized(nativeLock) {
+            client?.moveToChannel(channelId)
+        }
     }
 
     fun sendAudio(data: ByteArray, codec: Int) {
-        client?.sendAudio(data, codec)
+        synchronized(nativeLock) {
+            client?.sendAudio(data, codec)
+        }
     }
 
     fun setInputMuted(muted: Boolean) {
-        val c = client
-        Log.i(TAG, "setInputMuted($muted) — client=${if (c != null) "present" else "NULL"}")
-        if (c == null) return
-        try {
-            c.setInputMuted(muted)
-        } catch (e: Exception) {
-            Log.w(TAG, "setInputMuted failed", e)
+        synchronized(nativeLock) {
+            val c = client ?: return
+            try {
+                c.setInputMuted(muted)
+            } catch (e: Exception) {
+                Log.w(TAG, "setInputMuted failed", e)
+            }
         }
     }
 
@@ -233,8 +240,13 @@ class TsClient {
         val deferred = CompletableDeferred<ByteArray>()
         downloadCallbacks[path] = deferred
         try {
-            client?.downloadFile(channelId, path)
-                ?: run { downloadCallbacks.remove(path); return null }
+            val sent = synchronized(nativeLock) {
+                client?.downloadFile(channelId, path) != null
+            }
+            if (!sent) {
+                downloadCallbacks.remove(path)
+                return null
+            }
         } catch (e: Exception) {
             downloadCallbacks.remove(path)
             Log.w(TAG, "downloadFile failed for $path", e)
@@ -255,8 +267,13 @@ class TsClient {
         val deferred = CompletableDeferred<List<TsFileEntry>>()
         fileListCallbacks[key] = deferred
         try {
-            client?.listFiles(channelId, path)
-                ?: run { fileListCallbacks.remove(key); return null }
+            val sent = synchronized(nativeLock) {
+                client?.listFiles(channelId, path) != null
+            }
+            if (!sent) {
+                fileListCallbacks.remove(key)
+                return null
+            }
         } catch (e: Exception) {
             fileListCallbacks.remove(key)
             Log.w(TAG, "listFiles failed for $path", e)
@@ -271,19 +288,27 @@ class TsClient {
     }
 
     fun deleteFile(channelId: Long, name: String) {
-        client?.deleteFile(channelId, name)
+        synchronized(nativeLock) {
+            client?.deleteFile(channelId, name)
+        }
     }
 
     fun renameFile(channelId: Long, oldName: String, newName: String) {
-        client?.renameFile(channelId, oldName, newName)
+        synchronized(nativeLock) {
+            client?.renameFile(channelId, oldName, newName)
+        }
     }
 
     fun createDirectory(channelId: Long, dirname: String) {
-        client?.createDirectory(channelId, dirname)
+        synchronized(nativeLock) {
+            client?.createDirectory(channelId, dirname)
+        }
     }
 
     fun queryChannelPermissions(channelId: Long) {
-        client?.queryChannelPermissions(channelId)
+        synchronized(nativeLock) {
+            client?.queryChannelPermissions(channelId)
+        }
     }
 
     private fun parseFileEntries(json: String): List<TsFileEntry> {
@@ -308,8 +333,13 @@ class TsClient {
         val deferred = CompletableDeferred<Boolean>()
         uploadCallbacks[path] = deferred
         try {
-            client?.uploadFile(channelId, path, data, overwrite)
-                ?: run { uploadCallbacks.remove(path); return false }
+            val sent = synchronized(nativeLock) {
+                client?.uploadFile(channelId, path, data, overwrite) != null
+            }
+            if (!sent) {
+                uploadCallbacks.remove(path)
+                return false
+            }
         } catch (e: Exception) {
             uploadCallbacks.remove(path)
             Log.w(TAG, "uploadFile failed for $path", e)
@@ -327,44 +357,39 @@ class TsClient {
 
     fun disconnect() {
         val c = client ?: return
-        // 1. Signal event loop to stop by nulling client
         client = null
 
-        // 2. Wait for event loop to actually exit (it checks client != null every ~20ms)
-        //    This prevents concurrent native access (Client is not thread-safe)
         val deadline = System.currentTimeMillis() + 1000
         while (eventLoopRunning.get() && System.currentTimeMillis() < deadline) {
             Thread.sleep(20)
         }
         eventLoopRunning.set(false)
 
-        // 3. Update state flows
         _state.value = ConnectionState.DISCONNECTED
         _channels.value = emptyList()
         _users.value = emptyList()
         _serverInfo.value = null
 
-        // 4. Now safe to call disconnect on the native client (no concurrent access)
-        try {
-            c.disconnect()
-            Log.d(TAG, "Native disconnect command sent")
-        } catch (e: Exception) {
-            Log.w(TAG, "disconnect failed", e)
-        }
-
-        // 5. Drive processEvents to flush the disconnect packet over the network
-        try {
-            val flushEnd = System.currentTimeMillis() + 500
-            while (System.currentTimeMillis() < flushEnd) {
-                c.processEvents()
-                Thread.sleep(20)
+        synchronized(nativeLock) {
+            try {
+                c.disconnect()
+            } catch (e: Exception) {
+                Log.w(TAG, "disconnect failed", e)
             }
-            Log.d(TAG, "Disconnect flush complete")
-        } catch (_: Exception) {}
 
-        // 6. Destroy the native client
-        try {
-            c.close()
-        } catch (_: Exception) {}
+            try {
+                val flushEnd = System.currentTimeMillis() + 300
+                while (System.currentTimeMillis() < flushEnd) {
+                    c.processEvents()
+                    Thread.sleep(20)
+                }
+            } catch (_: Exception) {}
+
+            try {
+                c.close()
+            } catch (_: Exception) {}
+        }
     }
+
+    private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 }
