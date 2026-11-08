@@ -2,8 +2,8 @@
 
 # 🎧 OpenTS
 
-**Современный Open Source клиент TeamSpeak 3 / TeamSpeak 6 для Android**  
-*Создано с любовью для быстрого, качественного и уютного голосового общения :3*
+**Modern Open-Source TeamSpeak 3 / TeamSpeak 6 Client for Android**  
+*Crafted with love for fast, high-quality, and cozy voice communication :3*
 
 [![Platform](https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
@@ -12,167 +12,167 @@
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 [![Creator](https://img.shields.io/badge/Creator-NearCorp-FF4081?style=for-the-badge)](https://github.com/NearCorp)
 
-[🇷🇺 Русский](README.md) • [🇬🇧 English](README_EN.md) • [📥 Скачать APK](#-быстрый-старт-и-установка) • [🛠 Сборка](#-сборка-из-исходников)
+[🇬🇧 English](README.md) • [🇷🇺 Русский](README_RU.md) • [📥 Download APK](#-quick-start--installation) • [🛠 Build from Source](#-building-from-source)
 
 </div>
 
 ---
 
-## 🌟 О проекте
+## 🌟 About the Project
 
-**OpenTS** — это неофициальный современный клиент голосового протокола **TeamSpeak 3** и **TeamSpeak 6** для операционной системы Android. 
+**OpenTS** is an unofficial, modern Android client for **TeamSpeak 3** and **TeamSpeak 6** voice protocols.
 
-В отличие от устаревшего оригинального клиента, **OpenTS** разработан с нуля с акцентом на современный дизайн **Material You (Material 3)**, сверхнизкую задержку звука на базе нативного ядра Rust ([tslib](https://github.com/flamme-demon/tslib_multi)), гибкую кастомизацию и полный контроль над звуком вашего микрофона и динамиков.
+Unlike outdated legacy clients, **OpenTS** was designed from the ground up prioritizing **Material You (Material 3)** aesthetics, ultra-low audio latency powered by a high-performance Rust native engine ([tslib](https://github.com/flamme-demon/tslib_multi)), rich UI personalization, and full control over your microphone and audio output routing.
 
 ---
 
-## ✨ Ключевые возможности
+## ✨ Key Features
 
-### 🎙 Продвинутый звук и голосовая связь
-* **Адаптивный VAD (Voice Activity Detection):**
-  * Полноценная активация по голосу с живым цветным индикатором уровня микрофона и настройкой порога срабатывания в процентах.
-  * Когда вы молчите, передача полностью глушится (Noise Gating), обеспечивая абсолютную тишину в эфире.
+### 🎙 Advanced Audio & Voice Communication
+* **Adaptive Voice Activity Detection (VAD):**
+  * Real-time voice activation with a dynamic live microphone energy level meter and an adjustable threshold slider.
+  * When silent, transmission is completely gated (Noise Gating), ensuring absolute silence in the channel.
 * **Push-To-Talk (PTT):**
-  * Большая удобная кнопка разговора и быстрое переключение между PTT и VAD в один тап прямо с нижнего бара.
-* **Переключение вывода звука (Громкая связь / Разговорный динамик):**
-  * Быстрая кнопка переключения в шапке экрана: слушайте собеседников через громкие внешние динамики смартфона или приватно через верхний разговорный динамик («в ухо»).
-  * Всплывающие уведомления подтверждают текущий режим вывода.
-* **Усиление микрофона (Gain Boost):**
-  * Программное аппаратное усиление чувствительности микрофона от **1.0× до 8.0×**. Собеседники услышат вас даже с тихого микрофона.
-* **Аппаратные звуковые эффекты:**
-  * **Шумоподавление (NoiseSuppressor):** отсекает шум вентиляторов, улицу и клики клавиатуры.
-  * **Эхоподавление (AcousticEchoCanceler):** предотвращает попадание звука из динамиков обратно в микрофон при громкой связи.
-  * Автоматическая проверка поддержки звуковым процессором вашего устройства.
-* **Выбор микрофона и источника:**
-  * Поддержка переключения между нижним микрофоном, микрофоном камеры, гарнитурами и внешними USB/Bluetooth устройствами.
-* **Индивидуальная громкость участников:**
-  * Регулировка громкости каждого собеседника отдельно (от 0% до 200%) и персональный мьют.
-* **Кодек Opus Voice:**
-  * 48 кГц, моно, фреймы 20 мс для кристально чистого звука с минимальной задержкой.
+  * Large, responsive talk button with an instant one-tap switcher between PTT and VAD modes on the bottom bar.
+* **Audio Output Routing (Speakerphone / Earpiece Toggle):**
+  * Quick switch button in the top bar: listen out loud through external phone stereo speakers, or privately through the in-call earpiece.
+  * Clear toast notifications confirm the active routing mode.
+* **Microphone Gain Boost:**
+  * Hardware & software amplification ranging from **1.0× to 8.0×**. Teammates will hear you clearly even with a quiet microphone.
+* **Hardware Audio Effects:**
+  * **Noise Suppression (NoiseSuppressor):** cuts out fan hum, background noise, and keyboard clicks.
+  * **Acoustic Echo Cancellation (AcousticEchoCanceler):** eliminates speakerphone audio bleeding back into the microphone.
+  * Automatic hardware capability check with live device support indicators.
+* **Microphone Input Device Selector:**
+  * Choose between bottom main mic, camera mic, wired headsets, and external USB/Bluetooth audio interfaces.
+* **Per-User Volume Control:**
+  * Individually adjust any user's volume from 0% to 200%, or mute specific noisy users.
+* **Opus Voice Codec:**
+  * 48 kHz, mono, 20 ms frames for crystal-clear voice clarity with minimal bandwidth and latency.
 
-### 🎨 Кастомизация и Material 3
-* **Своё фото на задний фон:**
-  * Установите любое изображение или фотографию из галереи в качестве фоновых обоев приложения.
-  * Плавная регулировка затемнения фона (от 10% до 90%), чтобы каналы, чат и карточки оставались идеально читаемыми.
-* **Интерфейс Material You:**
-  * Поддержка светлой и темной темы с закругленными формами, карточками и плавной анимацией говорящих пользователей.
-* **Многоязычность:**
-  * Полный перевод на русский и английский языки с поддержкой системного языка по умолчанию.
+### 🎨 Customization & Material 3
+* **Custom Background Wallpaper:**
+  * Pick any photo or image from your gallery as the app's background.
+  * Adjustable dimming slider (10% to 90%) ensures cards, channel trees, and chat remain crisp and readable over any wallpaper.
+* **Material You Design:**
+  * Modern cards, smooth animations, talking ripples, and dynamic theme support.
+* **Multilingual:**
+  * Complete Russian and English translations, plus auto-detection from system settings.
 
-### 💬 Чат и мультимедиа
-* **Канальные и личные сообщения (PM):**
-  * Бейджи непрочитанных сообщений, сохранение истории переписки.
-  * Поддержка BBCode-форматирования (жирный, курсив, цвет, ссылки).
-  * Автоматический предпросмотр изображений и миниатюр видеоссылок.
-* **Просмотр трансляций экрана:**
-  * Встроенный плеер видеопотоков (RTSP, RTMP, HTTP, HLS / .m3u8).
-  * Автоматическое распознавание ссылок на трансляции из чата канала.
-  * Режимы вписывания (Fit) и заполнения (Fill) на весь экран.
+### 💬 Chat & Multimedia
+* **Channel & Private Messaging (PM):**
+  * Unread badges, conversation persistence across sessions.
+  * BBCode formatting (bold, italic, colors, links).
+  * Automatic image preview and video link thumbnails.
+* **Screen Broadcast Viewer:**
+  * Built-in player for external live video streams (RTSP, RTMP, HTTP, HLS / .m3u8).
+  * Auto-detection of video links posted in channel chat.
+  * Aspect ratio toggle (Fit / Fill) and fullscreen mode.
 
-### 📁 Файловый менеджер каналов
-* Просмотр файлов и папок в директории текущего канала на сервере.
-* Скачивание файлов напрямую в папку `Загрузки` телефона.
-* Загрузка файлов со смартфона на сервер, создание новых папок, переименование и удаление файлов.
+### 📁 Channel File Manager
+* Browse files and folders in the current channel on the server.
+* Download files directly to your phone's `Downloads` directory.
+* Upload files from phone storage, create directories, rename, and delete files.
 
-### 🔖 Закладки и удобство
-* Сохранение серверов в закладки с автоматической загрузкой и кэшированием серверных иконок.
-* Быстрое подключение и функция **Автоподключения** при старте приложения.
-
----
-
-## 📥 Быстрый старт и установка
-
-Вы можете скачать готовый скомпилированный APK-файл из вкладки [**Releases**](../../releases):
-
-1. Скачайте файл **`app-debug.apk`**.
-2. Установите его на Android-смартфон (требуется Android 10 / API 29 или новее).
-3. При первом запуске выдайте разрешение на запись аудио (микрофон).
-4. Введите адрес любого сервера TeamSpeak 3 или выберите из сохраненных закладок и общайтесь!
+### 🔖 Bookmarks & Usability
+* Save your favorite servers with automatic icon fetching and caching.
+* Instant connection and optional **Auto-Reconnect** on app launch.
 
 ---
 
-## 🛠 Сборка из исходников
+## 📥 Quick Start & Installation
 
-### Требования
-* **JDK 17** (Amazon Corretto, Eclipse Temurin или OpenJDK 17)
-* **Android Studio Ladybug** (или новее) / Android SDK 35 / NDK 27.x
-* **Rust** (актуальная stable версия `rustup`)
-* Утилита **`cargo-ndk`**:
+You can download the pre-compiled APK from the [**Releases**](../../releases) page:
+
+1. Download **`app-debug.apk`**.
+2. Install it on your Android device (requires Android 10 / API 29 or higher).
+3. Grant Audio Recording permission on first launch.
+4. Connect to any TeamSpeak 3 server and start chatting!
+
+---
+
+## 🛠 Building from Source
+
+### Prerequisites
+* **JDK 17** (Amazon Corretto, Eclipse Temurin, or OpenJDK 17)
+* **Android Studio Ladybug** (or newer) / Android SDK 35 / NDK 27.x
+* **Rust** (stable toolchain via `rustup`)
+* **`cargo-ndk`**:
   ```bash
   cargo install cargo-ndk
   ```
-* Склонированная нативная библиотека **tslib** рядом с папкой `OpenTS`:
+* Native library **tslib** cloned next to `OpenTS`:
   ```bash
   git clone https://github.com/flamme-demon/tslib_multi ../tslib
   ```
 
-### Инструкция по сборке
+### Build Steps
 
-1. **Клонируйте репозиторий OpenTS:**
+1. **Clone the OpenTS repository:**
    ```bash
    git clone https://github.com/NearCorp/OpenTS.git
    cd OpenTS
    ```
 
-2. **Соберите нативные Rust-библиотеки (arm64-v8a и x86_64):**
+2. **Compile native Rust JNI libraries (arm64-v8a & x86_64):**
    ```bash
    ./gradlew buildRustLibs
    ```
 
-3. **Соберите готовый APK приложения:**
+3. **Build the debug APK:**
    ```bash
    ./gradlew assembleDebug
    ```
 
-Готовый файл будет находиться по пути:
+The compiled APK will be generated at:
 ```
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
-## 🏗 Архитектура проекта
+## 🏗 Architecture Overview
 
 ```
 OpenTS/
 ├── app/src/main/
-│   ├── java/dev/tslib/          # JNI-обёртки к нативной Rust-библиотеке tslib
+│   ├── java/dev/tslib/          # JNI bridge to Rust tslib native library
 │   ├── kotlin/dev/tsdroid/
-│   │   ├── bridge/              # Аудиодвижок (AudioBridge), кэши аватаров и иконок
-│   │   ├── data/                # Хранилище настроек (DataStore), сообщений и закладок
-│   │   ├── service/             # TsConnectionService (Фоновый Foreground-сервис связи)
-│   │   ├── viewmodel/           # Архитектурные ViewModels (ConnectionViewModel, ServerViewModel)
+│   │   ├── bridge/              # Audio engine (AudioBridge), cache managers
+│   │   ├── data/                # DataStore preferences, bookmarks, message database
+│   │   ├── service/             # TsConnectionService (Foreground connection service)
+│   │   ├── viewmodel/           # Architecture ViewModels (ConnectionViewModel, ServerViewModel)
 │   │   └── ui/
-│   │       ├── screen/          # Главные экраны (ConnectionScreen, ServerScreen)
-│   │       └── component/       # Компоненты Compose (ChannelTree, ChatView, SettingsDialog...)
-│   └── res/                     # Ресурсы, векторные иконки, темы и локализации (ru, en)
-├── gradle/                      # Конфигурация сборки и версий (version catalogs)
-└── LICENSE                      # Лицензия GNU General Public License v3.0
+│   │       ├── screen/          # Primary screens (ConnectionScreen, ServerScreen)
+│   │       └── component/       # Compose components (ChannelTree, ChatView, SettingsDialog...)
+│   └── res/                     # Vector icons, themes, and string localizations (ru, en)
+├── gradle/                      # Version catalogs and Gradle build configuration
+└── LICENSE                      # GNU General Public License v3.0
 ```
 
 ---
 
-## 🤝 Участие в разработке
+## 🤝 Contributing
 
-Мы рады любому вкладу в развитие проекта!
-* Нашли ошибку? [Создайте Issue](../../issues/new?template=bug_report.md) с описанием бага и моделью устройства.
-* Есть идея новой функции? [Предложите её в Feature Request](../../issues/new?template=feature_request.md).
-* Хотите внести изменения в код? Отправьте Pull Request! Подробнее в [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome!
+* Encountered an issue? [Open an Issue](../../issues/new?template=bug_report.md) with steps to reproduce and your device model.
+* Have an idea for a feature? [Submit a Feature Request](../../issues/new?template=feature_request.md).
+* Want to contribute code? Read our [CONTRIBUTING.md](CONTRIBUTING.md) guide and submit a PR!
 
 ---
 
-## 📜 Лицензия
+## 📜 License
 
-Проект **OpenTS** распространяется под свободной лицензией **GNU General Public License v3.0 (GPL-3.0)**.  
-Вы имеете полное право изучать, изменять и распространять исходный код при сохранении открытости производных работ.
+**OpenTS** is released under the **GNU General Public License v3.0 (GPL-3.0)**.  
+You are free to inspect, modify, and redistribute the source code under the terms of the license.
 
-Подробности смотрите в файле [LICENSE](LICENSE).
+See the [LICENSE](LICENSE) file for complete details.
 
 ---
 
 <div align="center">
 
-**Создатель:** [**NearCorp**](https://github.com/NearCorp)  
-*Сделано с любовью и теплом для уютных посиделок в войсе :3*
+**Creator:** [**NearCorp**](https://github.com/NearCorp)  
+*Crafted with love for cozy voice chats :3*
 
 </div>
