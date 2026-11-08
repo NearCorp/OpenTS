@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.BitmapFactory
+import android.media.MediaRecorder
 import android.os.IBinder
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -14,6 +15,7 @@ import androidx.lifecycle.viewModelScope
 import dev.tsdroid.R
 import dev.tsdroid.data.BookmarkStore
 import dev.tsdroid.data.ServerBookmark
+import dev.tsdroid.data.SettingsStore
 import dev.tsdroid.service.TsConnectionService
 import dev.tslib.Channel
 import dev.tslib.ChannelTree
@@ -39,12 +41,69 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private val bookmarkStore = BookmarkStore(application)
+    private val settingsStore = SettingsStore(application)
 
     val bookmarks: StateFlow<List<ServerBookmark>> = bookmarkStore.bookmarks
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val autoReconnect: StateFlow<Boolean> = bookmarkStore.autoReconnect
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val appLanguage: StateFlow<String> = settingsStore.appLanguage
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "system")
+
+    val isPttMode: StateFlow<Boolean> = settingsStore.isPttMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val vadThreshold: StateFlow<Float> = settingsStore.vadThreshold
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0.25f)
+
+    val noiseSuppressionEnabled: StateFlow<Boolean> = settingsStore.noiseSuppressionEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val echoCancellationEnabled: StateFlow<Boolean> = settingsStore.echoCancellationEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val audioSource: StateFlow<Int> = settingsStore.audioSource
+        .stateIn(viewModelScope, SharingStarted.Eagerly, MediaRecorder.AudioSource.MIC)
+
+    val showLinkThumbnails: StateFlow<Boolean> = settingsStore.showLinkThumbnails
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val autoLoadImages: StateFlow<Boolean> = settingsStore.autoLoadImages
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun setAppLanguage(language: String) {
+        viewModelScope.launch { settingsStore.setAppLanguage(language) }
+    }
+
+    fun setIsPttMode(isPtt: Boolean) {
+        viewModelScope.launch { settingsStore.setIsPttMode(isPtt) }
+    }
+
+    fun setVadThreshold(threshold: Float) {
+        viewModelScope.launch { settingsStore.setVadThreshold(threshold) }
+    }
+
+    fun setNoiseSuppressionEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setNoiseSuppressionEnabled(enabled) }
+    }
+
+    fun setEchoCancellationEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setEchoCancellationEnabled(enabled) }
+    }
+
+    fun setAudioSource(source: Int) {
+        viewModelScope.launch { settingsStore.setAudioSource(source) }
+    }
+
+    fun setShowLinkThumbnails(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setShowLinkThumbnails(enabled) }
+    }
+
+    fun setAutoLoadImages(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setAutoLoadImages(enabled) }
+    }
 
     val address = MutableStateFlow("")
     val nickname = MutableStateFlow("")

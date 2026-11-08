@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ScreenShare
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.NightsStay
@@ -69,6 +70,18 @@ fun UserItem(
         )
 
         // Detail status icons on the right
+        val hasStream = user.description?.contains("stream", ignoreCase = true) == true ||
+            user.description?.contains("http", ignoreCase = true) == true ||
+            user.awayMessage?.contains("stream", ignoreCase = true) == true
+        if (hasStream) {
+            Icon(
+                Icons.AutoMirrored.Filled.ScreenShare,
+                contentDescription = stringResource(R.string.screen_share),
+                modifier = Modifier.size(15.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(3.dp))
+        }
         if (user.isRecording) {
             Icon(
                 Icons.Default.RadioButtonChecked,

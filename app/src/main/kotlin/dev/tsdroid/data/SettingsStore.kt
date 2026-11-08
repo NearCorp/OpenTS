@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -21,6 +22,7 @@ private val KEY_NOISE_SUPPRESSION = booleanPreferencesKey("noise_suppression")
 private val KEY_ECHO_CANCELLATION = booleanPreferencesKey("echo_cancellation")
 private val KEY_AUDIO_SOURCE = intPreferencesKey("audio_source")
 private val KEY_PREFERRED_DEVICE_ID = intPreferencesKey("preferred_device_id")
+private val KEY_APP_LANGUAGE = stringPreferencesKey("app_language")
 
 class SettingsStore(private val context: Context) {
 
@@ -50,6 +52,9 @@ class SettingsStore(private val context: Context) {
 
     val preferredInputDeviceId: Flow<Int> = context.settingsDataStore.data
         .map { it[KEY_PREFERRED_DEVICE_ID] ?: -1 }
+
+    val appLanguage: Flow<String> = context.settingsDataStore.data
+        .map { it[KEY_APP_LANGUAGE] ?: "system" }
 
     suspend fun setAudioGain(gain: Float) {
         context.settingsDataStore.edit { it[KEY_AUDIO_GAIN] = gain }
@@ -85,5 +90,9 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setPreferredInputDeviceId(deviceId: Int) {
         context.settingsDataStore.edit { it[KEY_PREFERRED_DEVICE_ID] = deviceId }
+    }
+
+    suspend fun setAppLanguage(language: String) {
+        context.settingsDataStore.edit { it[KEY_APP_LANGUAGE] = language }
     }
 }

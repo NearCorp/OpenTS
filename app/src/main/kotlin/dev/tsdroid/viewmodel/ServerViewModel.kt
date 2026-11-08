@@ -122,6 +122,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private val _privateMessages = MutableStateFlow<Map<Int, List<ChatMessage>>>(emptyMap())
     val privateMessages: StateFlow<Map<Int, List<ChatMessage>>> = _privateMessages.asStateFlow()
 
+    val appLanguage: StateFlow<String> = settingsStore.appLanguage
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "system")
+
     val isPttMode: StateFlow<Boolean> = settingsStore.isPttMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
@@ -171,6 +174,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val autoLoadImages: StateFlow<Boolean> = settingsStore.autoLoadImages
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val autoReconnect: StateFlow<Boolean> = bookmarkStore.autoReconnect
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     // File manager state
@@ -546,6 +552,10 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
         tsClient?.moveToChannel(channelId)
     }
 
+    fun setAppLanguage(language: String) {
+        viewModelScope.launch { settingsStore.setAppLanguage(language) }
+    }
+
     fun setAudioGain(gain: Float) {
         audioBridge?.gainFactor = gain
         viewModelScope.launch { settingsStore.setAudioGain(gain) }
@@ -557,6 +567,10 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setAutoLoadImages(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setAutoLoadImages(enabled) }
+    }
+
+    fun setAutoReconnect(enabled: Boolean) {
+        viewModelScope.launch { bookmarkStore.setAutoReconnect(enabled) }
     }
 
     fun setIsPttMode(isPtt: Boolean) {

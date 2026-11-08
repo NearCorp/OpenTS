@@ -131,4 +131,26 @@
     <string name="mic_device_usb">USB-микрофон</string>
     <string name="mic_device_other">Другое устройство</string>
     <string name="general_settings">Основные настройки</string>
+    <string name="language">Язык приложения</string>
+    <string name="language_system">Авто (Системный)</string>
+    <string name="language_ru">Русский</string>
+    <string name="language_en">English</string>
+    <string name="screen_share">Трансляция экрана</string>
+    <string name="watch_stream">Смотреть трансляцию экрана</string>
+    <string name="stream_active">В ЭФИРЕ</string>
+    <string name="stream_waiting">Ожидание трансляции экрана...</string>
+    <string name="stream_waiting_desc">Трансляция пользователя появится здесь автоматически, либо укажите прямую ссылку ниже.</string>
+    <string name="stream_url">Ссылка на видеопоток</string>
+    <string name="stream_url_hint">rtmp://, http://, rtsp://, .m3u8</string>
+    <string name="stream_connect">Смотреть</string>
+    <string name="fullscreen">На весь экран</string>
+    <string name="aspect_fit">Вписать</string>
+    <string name="aspect_fill">Заполнить</string>
+    <string name="channel_streaming_user">%1$s транслирует экран</string>
+    <string name="quick_connect">Быстрое подключение</string>
+    <string name="quick_connect_desc">Подключение к любому TeamSpeak серверу</string>
+    <string name="server_bookmarks">Закладки серверов</string>
+    <string name="connect_now">Подключиться</string>
+    <string name="welcome_title">OpenTS</string>
+    <string name="welcome_subtitle">Быстрый и современный клиент TeamSpeak</string>
 </resources>

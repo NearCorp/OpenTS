@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
@@ -34,10 +35,12 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +76,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,10 +85,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.tsdroid.R
-import dev.tslib.ConnectionState
+import dev.tsdroid.ui.component.AppSettingsDialog
 import dev.tsdroid.ui.component.ChannelTree
 import dev.tsdroid.viewmodel.ConnectionViewModel
+import dev.tslib.ConnectionState
 import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
+
+private val serverAvatarColors = listOf(
+    Color(0xFF5C6BC0), // indigo
+    Color(0xFF26A69A), // teal
+    Color(0xFFEF5350), // red
+    Color(0xFFAB47BC), // purple
+    Color(0xFF42A5F5), // blue
+    Color(0xFFFF7043), // deep orange
+    Color(0xFF66BB6A), // green
+    Color(0xFFEC407A), // pink
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +122,18 @@ fun ConnectionScreen(
     val browsedChannels by viewModel.browsedChannels.collectAsState()
     val isBrowsing by viewModel.isBrowsing.collectAsState()
     val showChannelPicker by viewModel.showChannelPicker.collectAsState()
+
+    // Settings
+    val appLanguage by viewModel.appLanguage.collectAsState()
+    val isPttMode by viewModel.isPttMode.collectAsState()
+    val vadThreshold by viewModel.vadThreshold.collectAsState()
+    val noiseSuppressionEnabled by viewModel.noiseSuppressionEnabled.collectAsState()
+    val echoCancellationEnabled by viewModel.echoCancellationEnabled.collectAsState()
+    val audioSource by viewModel.audioSource.collectAsState()
+    val showLinkThumbnails by viewModel.showLinkThumbnails.collectAsState()
+    val autoLoadImages by viewModel.autoLoadImages.collectAsState()
+
+    var showSettings by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     var deleteConfirmIndex by remember { mutableStateOf<Int?>(null) }
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -113,7 +142,7 @@ fun ConnectionScreen(
 
     val isConnecting = connectionState == ConnectionState.CONNECTING
 
-    // Request audio and notification permissions
+    // Permissions
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { /* checked at usage */ }
@@ -146,8 +175,8 @@ fun ConnectionScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -159,9 +188,25 @@ fun ConnectionScreen(
                             )
                         }
                         Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.app_name),
-                            fontWeight = FontWeight.Bold,
+                        Column {
+                            Text(
+                                text = stringResource(R.string.welcome_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = stringResource(R.string.welcome_subtitle),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = stringResource(R.string.settings),
                         )
                     }
                 },
@@ -191,53 +236,141 @@ fun ConnectionScreen(
         ) {
             Spacer(Modifier.height(4.dp))
 
-            // Auto-reconnect setting card
-            OutlinedCard(
+            // Quick Connect Card
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                ),
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
                         Text(
-                            stringResource(R.string.auto_reconnect),
+                            text = stringResource(R.string.quick_connect),
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            stringResource(R.string.channel_connection_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
                         )
                     }
-                    Switch(
-                        checked = autoReconnect,
-                        onCheckedChange = { viewModel.setAutoReconnect(it) },
+
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { viewModel.address.value = it },
+                        label = { Text(stringResource(R.string.server_address)) },
+                        placeholder = { Text(stringResource(R.string.server_address_placeholder)) },
+                        leadingIcon = { Icon(Icons.Default.Dns, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isConnecting,
                     )
+
+                    OutlinedTextField(
+                        value = nickname,
+                        onValueChange = { viewModel.nickname.value = it },
+                        label = { Text(stringResource(R.string.nickname)) },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isConnecting,
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = { viewModel.connect(onConnected) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isConnecting,
+                        ) {
+                            if (isConnecting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .height(18.dp)
+                                        .width(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            } else {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            Text(stringResource(if (isConnecting) R.string.connecting else R.string.connect_now))
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.saveBookmark()
+                                scope.launch { snackbarHostState.showSnackbar("Закладка сохранена") }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = address.isNotBlank() && nickname.isNotBlank(),
+                        ) {
+                            Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(18.dp))
+                        }
+                    }
                 }
             }
 
-            // Bookmarks header
+            // Bookmarks Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    stringResource(R.string.bookmarks),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-                if (bookmarks.isNotEmpty()) {
-                    Text(
-                        "${bookmarks.size}",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Bookmark,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
                     )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        stringResource(R.string.server_bookmarks),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                if (bookmarks.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            "${bookmarks.size}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
                 }
             }
 
@@ -256,7 +389,7 @@ fun ConnectionScreen(
                         Icon(
                             Icons.Default.Bookmark,
                             contentDescription = null,
-                            modifier = Modifier.size(48.dp),
+                            modifier = Modifier.size(44.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         )
                         Spacer(Modifier.height(8.dp))
@@ -277,7 +410,7 @@ fun ConnectionScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
+                                .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             val icon = if (bookmark.iconId != 0L) bookmarkIcons[bookmark.iconId] else null
@@ -285,26 +418,28 @@ fun ConnectionScreen(
                                 Image(
                                     bitmap = icon,
                                     contentDescription = null,
-                                    modifier = Modifier.size(36.dp),
+                                    modifier = Modifier.size(38.dp),
                                     contentScale = ContentScale.Fit,
                                 )
                             } else {
+                                val sName = bookmark.serverName ?: bookmark.name
+                                val color = serverAvatarColors[sName.hashCode().absoluteValue % serverAvatarColors.size]
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                        .background(color),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Icon(
-                                        Icons.Default.Star,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp),
-                                        tint = MaterialTheme.colorScheme.primary,
+                                    Text(
+                                        text = sName.firstOrNull()?.uppercase() ?: "S",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium,
                                     )
                                 }
                             }
-                            Spacer(Modifier.width(14.dp))
+                            Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = bookmark.serverName ?: bookmark.name,
@@ -365,6 +500,31 @@ fun ConnectionScreen(
             Spacer(Modifier.height(16.dp))
         }
 
+        // Settings Dialog on Main Screen
+        if (showSettings) {
+            AppSettingsDialog(
+                appLanguage = appLanguage,
+                onAppLanguageChange = { viewModel.setAppLanguage(it) },
+                isPttMode = isPttMode,
+                onPttModeChange = { viewModel.setIsPttMode(it) },
+                vadThreshold = vadThreshold,
+                onVadThresholdChange = { viewModel.setVadThreshold(it) },
+                noiseSuppressionEnabled = noiseSuppressionEnabled,
+                onNoiseSuppressionChange = { viewModel.setNoiseSuppressionEnabled(it) },
+                echoCancellationEnabled = echoCancellationEnabled,
+                onEchoCancellationChange = { viewModel.setEchoCancellationEnabled(it) },
+                audioSource = audioSource,
+                onAudioSourceChange = { viewModel.setAudioSource(it) },
+                showLinkThumbnails = showLinkThumbnails,
+                onShowLinkThumbnailsChange = { viewModel.setShowLinkThumbnails(it) },
+                autoLoadImages = autoLoadImages,
+                onAutoLoadImagesChange = { viewModel.setAutoLoadImages(it) },
+                autoReconnect = autoReconnect,
+                onAutoReconnectChange = { viewModel.setAutoReconnect(it) },
+                onDismiss = { showSettings = false },
+            )
+        }
+
         // Delete confirmation dialog
         deleteConfirmIndex?.let { idx ->
             val bookmarkName = bookmarks.getOrNull(idx)?.let { it.serverName ?: it.name } ?: ""
@@ -422,7 +582,7 @@ fun ConnectionScreen(
             }
         }
 
-        // Connection bottom sheet
+        // Connection / Add Bookmark Bottom Sheet
         if (showBottomSheet) {
             ModalBottomSheet(
                 onDismissRequest = {

@@ -131,4 +131,26 @@
     <string name="mic_device_usb">USB Microphone</string>
     <string name="mic_device_other">Other Audio Device</string>
     <string name="general_settings">General</string>
+    <string name="language">App Language</string>
+    <string name="language_system">Auto (System Default)</string>
+    <string name="language_ru">Русский</string>
+    <string name="language_en">English</string>
+    <string name="screen_share">Screen Sharing</string>
+    <string name="watch_stream">Watch Screen Share</string>
+    <string name="stream_active">LIVE</string>
+    <string name="stream_waiting">Waiting for screen broadcast...</string>
+    <string name="stream_waiting_desc">User stream will appear here automatically, or enter a direct stream URL below.</string>
+    <string name="stream_url">Stream Video URL</string>
+    <string name="stream_url_hint">rtmp://, http://, rtsp://, .m3u8</string>
+    <string name="stream_connect">Watch</string>
+    <string name="fullscreen">Fullscreen</string>
+    <string name="aspect_fit">Fit</string>
+    <string name="aspect_fill">Fill</string>
+    <string name="channel_streaming_user">%1$s is sharing screen</string>
+    <string name="quick_connect">Quick Connect</string>
+    <string name="quick_connect_desc">Connect to any TeamSpeak server</string>
+    <string name="server_bookmarks">Server Bookmarks</string>
+    <string name="connect_now">Connect</string>
+    <string name="welcome_title">OpenTS</string>
+    <string name="welcome_subtitle">Fast and modern TeamSpeak client</string>
 </resources>

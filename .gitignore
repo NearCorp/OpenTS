@@ -9,5 +9,6 @@
 .cxx
 *.apk
 *.aab
+*.zip
 /app/build
 /app/src/main/jniLibs

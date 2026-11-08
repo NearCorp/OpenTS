@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ScreenShare
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -52,6 +53,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -99,9 +101,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.tsdroid.R
+import dev.tsdroid.ui.component.AppSettingsDialog
 import dev.tsdroid.ui.component.ChannelTree
 import dev.tsdroid.ui.component.ChatView
 import dev.tsdroid.ui.component.FileManagerDialog
+import dev.tsdroid.ui.component.ScreenShareViewerDialog
 import dev.tsdroid.ui.component.ShareTarget
 import dev.tsdroid.viewmodel.ChatMessage
 import dev.tsdroid.viewmodel.DownloadState
@@ -141,6 +145,8 @@ fun ServerScreen(
     val audioGain by viewModel.audioGain.collectAsState()
     val showLinkThumbnails by viewModel.showLinkThumbnails.collectAsState()
     val autoLoadImages by viewModel.autoLoadImages.collectAsState()
+    val appLanguage by viewModel.appLanguage.collectAsState()
+    val autoReconnect by viewModel.autoReconnect.collectAsState()
     val fileManagerOpen by viewModel.fileManagerOpen.collectAsState()
     val fileList by viewModel.fileList.collectAsState()
     val currentFilePath by viewModel.currentFilePath.collectAsState()
@@ -149,6 +155,7 @@ fun ServerScreen(
 
     var showSettings by remember { mutableStateOf(false) }
     var selectedUserForDetails by remember { mutableStateOf<User?>(null) }
+    var userForScreenShare by remember { mutableStateOf<User?>(null) }
     var chatOpen by remember { mutableStateOf(false) }
     var chatEverOpened by remember { mutableStateOf(false) }
     var chatTab by remember { mutableIntStateOf(0) }
@@ -156,6 +163,14 @@ fun ServerScreen(
     var pmTargetId by remember { mutableStateOf<Int?>(null) }
 
     val pmTarget = pmTargetId?.let { id -> users.find { it.id == id } }
+
+    val streamingUsers = remember(users) {
+        users.filter { user ->
+            user.description?.contains("stream", ignoreCase = true) == true ||
+            user.description?.contains("http", ignoreCase = true) == true ||
+            user.awayMessage?.contains("stream", ignoreCase = true) == true
+        }
+    }
 
     val context = LocalContext.current
     val pmConversationUsers = remember(privateMessages, users) {
@@ -188,7 +203,9 @@ fun ServerScreen(
     val totalUnread = unreadChannel + totalUnreadPrivate
 
     if (showSettings) {
-        SettingsDialog(
+        AppSettingsDialog(
+            appLanguage = appLanguage,
+            onAppLanguageChange = { viewModel.setAppLanguage(it) },
             isPttMode = isPttMode,
             onPttModeChange = { viewModel.setIsPttMode(it) },
             vadThreshold = vadThreshold,
@@ -209,7 +226,17 @@ fun ServerScreen(
             onShowLinkThumbnailsChange = { viewModel.setShowLinkThumbnails(it) },
             autoLoadImages = autoLoadImages,
             onAutoLoadImagesChange = { viewModel.setAutoLoadImages(it) },
+            autoReconnect = autoReconnect,
+            onAutoReconnectChange = { viewModel.setAutoReconnect(it) },
             onDismiss = { showSettings = false },
+        )
+    }
+
+    userForScreenShare?.let { streamer ->
+        ScreenShareViewerDialog(
+            user = streamer,
+            avatar = streamer.uid?.let { userAvatars[it] },
+            onDismiss = { userForScreenShare = null },
         )
     }
 
@@ -223,6 +250,10 @@ fun ServerScreen(
                 pmTargetId = user.id
                 chatTab = 1
                 chatOpen = true
+                selectedUserForDetails = null
+            },
+            onWatchStream = {
+                userForScreenShare = user
                 selectedUserForDetails = null
             },
             onDismiss = { selectedUserForDetails = null },
@@ -424,17 +455,74 @@ fun ServerScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            ChannelTree(
-                channels = channels,
-                users = users,
-                onChannelClick = { channelId -> viewModel.moveToChannel(channelId) },
-                onUserClick = { user -> selectedUserForDetails = user },
-                channelIcons = channelIcons,
-                userAvatars = userAvatars,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp),
-            )
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (streamingUsers.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .clickable { userForScreenShare = streamingUsers.first() },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFFE53935))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.stream_active).uppercase(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Icon(
+                                Icons.AutoMirrored.Filled.ScreenShare,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "${stringResource(R.string.screen_share)}: ${streamingUsers.joinToString(", ") { it.nickname }}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = stringResource(R.string.watch_stream),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+
+                ChannelTree(
+                    channels = channels,
+                    users = users,
+                    onChannelClick = { channelId -> viewModel.moveToChannel(channelId) },
+                    onUserClick = { user -> selectedUserForDetails = user },
+                    channelIcons = channelIcons,
+                    userAvatars = userAvatars,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 8.dp),
+                )
+            }
 
             // File manager slide-up
             val fileManagerProgress by animateFloatAsState(
@@ -529,6 +617,7 @@ private fun UserDetailBottomSheet(
     currentVolume: Float,
     onVolumeChange: (Float) -> Unit,
     onSendPm: () -> Unit,
+    onWatchStream: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -658,6 +747,22 @@ private fun UserDetailBottomSheet(
             Spacer(Modifier.height(16.dp))
 
             Button(
+                onClick = onWatchStream,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                ),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ScreenShare, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.watch_stream))
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Button(
                 onClick = onSendPm,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -670,280 +775,7 @@ private fun UserDetailBottomSheet(
     }
 }
 
-@Composable
-private fun SettingsDialog(
-    isPttMode: Boolean,
-    onPttModeChange: (Boolean) -> Unit,
-    vadThreshold: Float,
-    onVadThresholdChange: (Float) -> Unit,
-    micLevel: Float,
-    noiseSuppressionEnabled: Boolean,
-    onNoiseSuppressionChange: (Boolean) -> Unit,
-    echoCancellationEnabled: Boolean,
-    onEchoCancellationChange: (Boolean) -> Unit,
-    audioSource: Int,
-    onAudioSourceChange: (Int) -> Unit,
-    preferredDeviceId: Int,
-    onPreferredDeviceIdChange: (Int) -> Unit,
-    availableDevices: List<InputDeviceInfo>,
-    currentGain: Float,
-    onGainChange: (Float) -> Unit,
-    showLinkThumbnails: Boolean,
-    onShowLinkThumbnailsChange: (Boolean) -> Unit,
-    autoLoadImages: Boolean,
-    onAutoLoadImagesChange: (Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var gainSlider by remember(currentGain) { mutableFloatStateOf(currentGain) }
-    var vadSlider by remember(vadThreshold) { mutableFloatStateOf(vadThreshold) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings)) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                // Section: Voice Transmission Mode
-                Text(
-                    text = stringResource(R.string.transmission_mode),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(
-                        selected = isPttMode,
-                        onClick = { onPttModeChange(true) },
-                        label = { Text("PTT") },
-                        leadingIcon = { Icon(Icons.Default.TouchApp, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    FilterChip(
-                        selected = !isPttMode,
-                        onClick = { onPttModeChange(false) },
-                        label = { Text("VAD") },
-                        leadingIcon = { Icon(Icons.Default.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // VAD Sensitivity & Live Level Bar
-                Text(
-                    text = "${stringResource(R.string.vad_sensitivity)}: ${(vadSlider * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.height(4.dp))
-
-                // Canvas showing live mic volume bar with vertical threshold marker
-                val trackColor = MaterialTheme.colorScheme.surfaceVariant
-                val primaryColor = MaterialTheme.colorScheme.primary
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(18.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                ) {
-                    drawRect(color = trackColor)
-                    val levelW = size.width * micLevel.coerceIn(0f, 1f)
-                    val activeColor = if (micLevel >= vadSlider) Color(0xFF4CAF50) else primaryColor
-                    drawRect(color = activeColor, size = Size(levelW, size.height))
-                    val thresholdX = size.width * vadSlider.coerceIn(0f, 1f)
-                    drawLine(
-                        color = Color(0xFFFF5252),
-                        start = Offset(thresholdX, 0f),
-                        end = Offset(thresholdX, size.height),
-                        strokeWidth = 3.dp.toPx(),
-                    )
-                }
-
-                Slider(
-                    value = vadSlider,
-                    onValueChange = { vadSlider = it },
-                    onValueChangeFinished = { onVadThresholdChange(vadSlider) },
-                    valueRange = 0.05f..0.95f,
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                // Section: Microphone Audio Source
-                Text(
-                    text = stringResource(R.string.audio_source),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(6.dp))
-
-                val sources = listOf(
-                    MediaRecorder.AudioSource.MIC to stringResource(R.string.audio_source_mic),
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION to stringResource(R.string.audio_source_voice_communication),
-                    MediaRecorder.AudioSource.UNPROCESSED to stringResource(R.string.audio_source_unprocessed),
-                    MediaRecorder.AudioSource.CAMCORDER to stringResource(R.string.audio_source_camcorder),
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    sources.forEach { (srcId, srcLabel) ->
-                        FilterChip(
-                            selected = audioSource == srcId,
-                            onClick = { onAudioSourceChange(srcId) },
-                            label = { Text(srcLabel, style = MaterialTheme.typography.bodySmall) },
-                            leadingIcon = if (audioSource == srcId) {
-                                { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // Section: Input Device (Physical microphone)
-                Text(
-                    text = stringResource(R.string.input_device),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(6.dp))
-
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // Default / Auto
-                    FilterChip(
-                        selected = preferredDeviceId == -1,
-                        onClick = { onPreferredDeviceIdChange(-1) },
-                        label = { Text(stringResource(R.string.device_default), style = MaterialTheme.typography.bodySmall) },
-                        leadingIcon = if (preferredDeviceId == -1) {
-                            { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                        } else null,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    // Detected devices
-                    availableDevices.forEach { dev ->
-                        FilterChip(
-                            selected = preferredDeviceId == dev.id,
-                            onClick = { onPreferredDeviceIdChange(dev.id) },
-                            label = { Text(dev.name, style = MaterialTheme.typography.bodySmall) },
-                            leadingIcon = if (preferredDeviceId == dev.id) {
-                                { Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // Section: Audio Processing (AEC & NS)
-                Text(
-                    text = stringResource(R.string.audio_settings),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.echo_cancellation),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = echoCancellationEnabled,
-                        onCheckedChange = onEchoCancellationChange,
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.noise_suppression),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = noiseSuppressionEnabled,
-                        onCheckedChange = onNoiseSuppressionChange,
-                    )
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                Text(
-                    text = "${stringResource(R.string.audio_gain)}: ${stringResource(R.string.audio_gain_value, gainSlider)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Slider(
-                    value = gainSlider,
-                    onValueChange = { gainSlider = it },
-                    onValueChangeFinished = { onGainChange(gainSlider) },
-                    valueRange = 1.0f..8.0f,
-                    steps = 13,
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                // Section: General Media Settings
-                Text(
-                    text = stringResource(R.string.general_settings),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.show_link_thumbnails),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = showLinkThumbnails,
-                        onCheckedChange = onShowLinkThumbnailsChange,
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.auto_load_images),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = autoLoadImages,
-                        onCheckedChange = onAutoLoadImagesChange,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.close))
-            }
-        },
-    )
-}
 
 @Composable
 private fun ChatPanel(
