@@ -423,7 +423,7 @@ fun ConnectionScreen(
                                 )
                             } else {
                                 val sName = bookmark.serverName ?: bookmark.name
-                                val color = serverAvatarColors[sName.hashCode().absoluteValue % serverAvatarColors.size]
+                                val color = serverAvatarColors[(sName.hashCode() and 0x7FFFFFFF) % serverAvatarColors.size]
                                 Box(
                                     modifier = Modifier
                                         .size(38.dp)

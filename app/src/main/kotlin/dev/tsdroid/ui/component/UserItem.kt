@@ -151,7 +151,7 @@ private fun AvatarWithRing(
             )
         } else {
             val bgColor = defaultAvatarColors[
-                nickname.hashCode().absoluteValue % defaultAvatarColors.size
+                (nickname.hashCode() and 0x7FFFFFFF) % defaultAvatarColors.size
             ]
             val letter = nickname.firstOrNull()?.uppercase() ?: "?"
             Box(

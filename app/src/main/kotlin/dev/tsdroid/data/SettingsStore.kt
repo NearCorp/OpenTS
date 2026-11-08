@@ -54,7 +54,11 @@ class SettingsStore(private val context: Context) {
         .map { it[KEY_PREFERRED_DEVICE_ID] ?: -1 }
 
     val appLanguage: Flow<String> = context.settingsDataStore.data
-        .map { it[KEY_APP_LANGUAGE] ?: "system" }
+        .map { it[KEY_APP_LANGUAGE] ?: appLanguageSync }
+
+    val appLanguageSync: String
+        get() = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+            .getString("app_language", "system") ?: "system"
 
     suspend fun setAudioGain(gain: Float) {
         context.settingsDataStore.edit { it[KEY_AUDIO_GAIN] = gain }
@@ -93,6 +97,10 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setAppLanguage(language: String) {
+        context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+            .edit()
+            .putString("app_language", language)
+            .commit()
         context.settingsDataStore.edit { it[KEY_APP_LANGUAGE] = language }
     }
 }
