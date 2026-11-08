@@ -161,6 +161,8 @@
     <string name="output_earpiece">Earpiece</string>
     <string name="output_speaker_short">Speaker</string>
     <string name="output_earpiece_short">Earpiece</string>
+    <string name="output_speaker_toast">Switched to speakerphone</string>
+    <string name="output_earpiece_toast">Switched to earpiece</string>
 
     <!-- Customization -->
     <string name="customization">Customization</string>

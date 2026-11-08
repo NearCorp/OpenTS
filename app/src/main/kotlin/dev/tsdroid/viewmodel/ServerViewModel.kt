@@ -587,6 +587,12 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     fun setSpeakerphoneOn(enabled: Boolean) {
         audioBridge?.setSpeakerphoneOn(enabled)
         viewModelScope.launch { settingsStore.setSpeakerphoneOn(enabled) }
+        try {
+            val msg = getApplication<Application>().getString(
+                if (enabled) R.string.output_speaker_toast else R.string.output_earpiece_toast
+            )
+            Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) {}
     }
 
     fun toggleSpeakerphone() {

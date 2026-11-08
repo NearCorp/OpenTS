@@ -147,7 +147,8 @@ class AudioBridge(
 
     fun initialize() {
         encoder = OpusCodec(audioConfig)
-        initAudioTrack()
+        applySpeakerphoneRouting(_isSpeakerphoneOn.value)
+        initAudioTrack(_isSpeakerphoneOn.value)
         startPlaybackLoop()
     }
 
@@ -186,11 +187,11 @@ class AudioBridge(
         // Attach hardware audio effects if supported
         initAudioEffects(record.audioSessionId)
 
-        // Ensure proper audio routing when capture starts
-        applySpeakerphoneRouting(_isSpeakerphoneOn.value)
-
         record.startRecording()
         _isCapturing.value = true
+
+        // Ensure proper audio routing after recording has started
+        applySpeakerphoneRouting(_isSpeakerphoneOn.value)
 
         captureJob = scope.launch(Dispatchers.IO) {
             val buffer = ShortArray(FRAME_SIZE_SAMPLES)
@@ -299,16 +300,27 @@ class AudioBridge(
         audioRecord = null
     }
 
-    private fun initAudioTrack() {
+    @Synchronized
+    private fun initAudioTrack(speakerphone: Boolean = _isSpeakerphoneOn.value) {
+        try {
+            audioTrack?.stop()
+            audioTrack?.release()
+        } catch (_: Exception) {}
+
         val minBuf = AudioTrack.getMinBufferSize(
             SAMPLE_RATE,
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
-        audioTrack = AudioTrack.Builder()
+
+        // For speakerphone (loud speakers), USAGE_MEDIA guarantees Android plays through external loud speakers!
+        // For earpiece (in-ear), USAGE_VOICE_COMMUNICATION routes to the in-call earpiece.
+        val usage = if (speakerphone) AudioAttributes.USAGE_MEDIA else AudioAttributes.USAGE_VOICE_COMMUNICATION
+
+        val track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setUsage(usage)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
@@ -322,8 +334,22 @@ class AudioBridge(
             .setBufferSizeInBytes(maxOf(minBuf, FRAME_SIZE_BYTES * 4))
             .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
             .build()
-        audioTrack?.play()
-        applySpeakerphoneRouting(_isSpeakerphoneOn.value)
+
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        if (audioManager != null) {
+            val targetType = if (speakerphone) {
+                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+            } else {
+                AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+            }
+            val targetDevice = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == targetType }
+            if (targetDevice != null) {
+                track.setPreferredDevice(targetDevice)
+            }
+        }
+
+        track.play()
+        audioTrack = track
     }
 
     /**
@@ -367,7 +393,9 @@ class AudioBridge(
 
                 if (hasData) {
                     val bytes = shortsToBytes(mixBuffer)
-                    audioTrack?.write(bytes, 0, bytes.size)
+                    try {
+                        audioTrack?.write(bytes, 0, bytes.size)
+                    } catch (_: Exception) {}
                 } else {
                     // No audio data — sleep briefly to avoid busy-waiting
                     delay(5)
@@ -423,6 +451,7 @@ class AudioBridge(
     fun setSpeakerphoneOn(enabled: Boolean) {
         _isSpeakerphoneOn.value = enabled
         applySpeakerphoneRouting(enabled)
+        initAudioTrack(enabled)
     }
 
     fun toggleSpeakerphone() {
@@ -432,23 +461,37 @@ class AudioBridge(
     fun applySpeakerphoneRouting(speakerphone: Boolean = _isSpeakerphoneOn.value) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
         try {
-            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val targetType = if (speakerphone) {
-                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-                } else {
-                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+            if (speakerphone) {
+                audioManager.mode = AudioManager.MODE_NORMAL
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = true
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val targetDevice = audioManager.availableCommunicationDevices.firstOrNull {
+                        it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                    }
+                    if (targetDevice != null) {
+                        val res = audioManager.setCommunicationDevice(targetDevice)
+                        Log.i(TAG, "setCommunicationDevice(SPEAKER): $res")
+                    } else {
+                        audioManager.clearCommunicationDevice()
+                    }
                 }
-                val targetDevice = audioManager.availableCommunicationDevices.firstOrNull { it.type == targetType }
-                if (targetDevice != null) {
-                    val res = audioManager.setCommunicationDevice(targetDevice)
-                    Log.i(TAG, "setCommunicationDevice(${targetDevice.productName}, type=$targetType): $res")
-                } else if (!speakerphone) {
-                    audioManager.clearCommunicationDevice()
+            } else {
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val targetDevice = audioManager.availableCommunicationDevices.firstOrNull {
+                        it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                    }
+                    if (targetDevice != null) {
+                        val res = audioManager.setCommunicationDevice(targetDevice)
+                        Log.i(TAG, "setCommunicationDevice(EARPIECE): $res")
+                    } else {
+                        audioManager.clearCommunicationDevice()
+                    }
                 }
             }
-            @Suppress("DEPRECATION")
-            audioManager.isSpeakerphoneOn = speakerphone
             Log.i(TAG, "applySpeakerphoneRouting: speakerphone=$speakerphone, mode=${audioManager.mode}")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to apply speakerphone routing", e)

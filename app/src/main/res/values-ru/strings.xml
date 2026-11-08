@@ -161,6 +161,8 @@
     <string name="output_earpiece">Разговорный динамик (В ухо)</string>
     <string name="output_speaker_short">Динамик</string>
     <string name="output_earpiece_short">В ухо</string>
+    <string name="output_speaker_toast">Звук переключен на громкую связь (динамик)</string>
+    <string name="output_earpiece_toast">Звук переключен на разговорный динамик (в ухо)</string>
 
     <!-- Customization -->
     <string name="customization">Кастомизация</string>
