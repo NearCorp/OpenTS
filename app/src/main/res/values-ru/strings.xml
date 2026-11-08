@@ -147,6 +147,7 @@
     <string name="aspect_fit">Вписать</string>
     <string name="aspect_fill">Заполнить</string>
     <string name="channel_streaming_user">%1$s транслирует экран</string>
+    <string name="stream_pc_info">Внимание: функция «Поделиться экраном» в клиенте TeamSpeak 5 на ПК использует закрытый протокол WebRTC myTeamSpeak и не передаётся через сервер TS3. Для просмотра на телефоне используйте прямую ссылку на видеопоток (OBS Studio / RTSP / HLS / HTTP) или отправьте её в чат канала.</string>
     <string name="quick_connect">Быстрое подключение</string>
     <string name="quick_connect_desc">Подключение к любому TeamSpeak серверу</string>
     <string name="server_bookmarks">Закладки серверов</string>

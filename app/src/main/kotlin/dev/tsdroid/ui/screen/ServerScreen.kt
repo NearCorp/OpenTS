@@ -164,11 +164,21 @@ fun ServerScreen(
 
     val pmTarget = pmTargetId?.let { id -> users.find { it.id == id } }
 
-    val streamingUsers = remember(users) {
+    val streamUrlFromChat = remember(channelMessages) {
+        val streamRegex = Regex("""(?:https?://|rtsp://|rtmp://)[^\s]+""", RegexOption.IGNORE_CASE)
+        channelMessages.lastOrNull { msg ->
+            streamRegex.containsMatchIn(msg.text)
+        }?.let { msg ->
+            streamRegex.find(msg.text)?.value to msg.senderId
+        }
+    }
+
+    val streamingUsers = remember(users, streamUrlFromChat) {
         users.filter { user ->
             user.description?.contains("stream", ignoreCase = true) == true ||
             user.description?.contains("http", ignoreCase = true) == true ||
-            user.awayMessage?.contains("stream", ignoreCase = true) == true
+            user.awayMessage?.contains("stream", ignoreCase = true) == true ||
+            (streamUrlFromChat != null && user.id == streamUrlFromChat.second)
         }
     }
 
@@ -233,9 +243,11 @@ fun ServerScreen(
     }
 
     userForScreenShare?.let { streamer ->
+        val chatUrl = if (streamUrlFromChat?.second == streamer.id) streamUrlFromChat.first else null
         ScreenShareViewerDialog(
             user = streamer,
             avatar = streamer.uid?.let { userAvatars[it] },
+            initialStreamUrl = chatUrl,
             onDismiss = { userForScreenShare = null },
         )
     }
@@ -278,6 +290,18 @@ fun ServerScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        val streamer = streamingUsers.firstOrNull() ?: users.firstOrNull()
+                        if (streamer != null) {
+                            userForScreenShare = streamer
+                        }
+                    }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ScreenShare,
+                            contentDescription = stringResource(R.string.screen_share),
+                            tint = if (streamingUsers.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                     IconButton(onClick = { viewModel.toggleFileManager() }) {
                         Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.file_manager))
                     }

@@ -147,6 +147,7 @@
     <string name="aspect_fit">Fit</string>
     <string name="aspect_fill">Fill</string>
     <string name="channel_streaming_user">%1$s is sharing screen</string>
+    <string name="stream_pc_info">Note: TeamSpeak 5 (PC) screen sharing uses proprietary closed myTeamSpeak WebRTC signaling and is not routed through the TS3 server. To watch a PC stream on your phone, use a direct stream link (OBS Studio / RTSP / HLS / HTTP) or paste the stream URL in the channel chat.</string>
     <string name="quick_connect">Quick Connect</string>
     <string name="quick_connect_desc">Connect to any TeamSpeak server</string>
     <string name="server_bookmarks">Server Bookmarks</string>

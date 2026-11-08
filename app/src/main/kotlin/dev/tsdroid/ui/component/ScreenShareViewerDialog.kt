@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -345,6 +346,32 @@ fun ScreenShareViewerDialog(
                                 color = Color.Gray,
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             )
+                            Spacer(Modifier.height(14.dp))
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF242424)),
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.Top,
+                                ) {
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(R.string.stream_pc_info),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.LightGray,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
