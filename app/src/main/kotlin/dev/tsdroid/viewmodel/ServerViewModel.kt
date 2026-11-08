@@ -170,6 +170,15 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     val audioGain: StateFlow<Float> = settingsStore.audioGain
         .stateIn(viewModelScope, SharingStarted.Eagerly, 1.0f)
 
+    val speakerphoneOn: StateFlow<Boolean> = settingsStore.speakerphoneOn
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val customBackgroundPath: StateFlow<String> = settingsStore.customBackgroundPath
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    val backgroundDim: StateFlow<Float> = settingsStore.backgroundDim
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0.45f)
+
     val showLinkThumbnails: StateFlow<Boolean> = settingsStore.showLinkThumbnails
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
@@ -319,6 +328,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 // Apply persisted audio settings
                 binder.audioBridge.gainFactor = audioGain.value
+                binder.audioBridge.setSpeakerphoneOn(speakerphoneOn.value)
                 binder.audioBridge.isVoiceActivationMode = !isPttMode.value
                 binder.audioBridge.isPttPressed = false
                 binder.audioBridge.vadThreshold = vadThreshold.value
@@ -571,6 +581,28 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setAutoReconnect(enabled: Boolean) {
         viewModelScope.launch { bookmarkStore.setAutoReconnect(enabled) }
+    }
+
+    fun setSpeakerphoneOn(enabled: Boolean) {
+        audioBridge?.setSpeakerphoneOn(enabled)
+        viewModelScope.launch { settingsStore.setSpeakerphoneOn(enabled) }
+    }
+
+    fun toggleSpeakerphone() {
+        val next = !speakerphoneOn.value
+        setSpeakerphoneOn(next)
+    }
+
+    fun setCustomBackground(uri: android.net.Uri?) {
+        viewModelScope.launch { settingsStore.setCustomBackground(uri) }
+    }
+
+    fun clearCustomBackground() {
+        viewModelScope.launch { settingsStore.clearCustomBackground() }
+    }
+
+    fun setBackgroundDim(dim: Float) {
+        viewModelScope.launch { settingsStore.setBackgroundDim(dim) }
     }
 
     fun setIsPttMode(isPtt: Boolean) {

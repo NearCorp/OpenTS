@@ -58,6 +58,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import coil.compose.AsyncImage
+import java.io.File
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -132,6 +134,10 @@ fun ConnectionScreen(
     val audioSource by viewModel.audioSource.collectAsState()
     val showLinkThumbnails by viewModel.showLinkThumbnails.collectAsState()
     val autoLoadImages by viewModel.autoLoadImages.collectAsState()
+    val audioGain by viewModel.audioGain.collectAsState()
+    val speakerphoneOn by viewModel.speakerphoneOn.collectAsState()
+    val customBackgroundPath by viewModel.customBackgroundPath.collectAsState()
+    val backgroundDim by viewModel.backgroundDim.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -211,7 +217,7 @@ fun ConnectionScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = if (customBackgroundPath.isNotBlank()) MaterialTheme.colorScheme.surface.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surface,
                 ),
             )
         },
@@ -226,14 +232,35 @@ fun ConnectionScreen(
             }
         },
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(padding),
         ) {
+            if (customBackgroundPath.isNotBlank()) {
+                val bgFile = remember(customBackgroundPath) { File(customBackgroundPath) }
+                if (bgFile.exists()) {
+                    AsyncImage(
+                        model = bgFile,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = backgroundDim)),
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
             Spacer(Modifier.height(4.dp))
 
             // Quick Connect Card
@@ -499,6 +526,7 @@ fun ConnectionScreen(
 
             Spacer(Modifier.height(16.dp))
         }
+        }
 
         // Settings Dialog on Main Screen
         if (showSettings) {
@@ -509,12 +537,21 @@ fun ConnectionScreen(
                 onPttModeChange = { viewModel.setIsPttMode(it) },
                 vadThreshold = vadThreshold,
                 onVadThresholdChange = { viewModel.setVadThreshold(it) },
+                speakerphoneOn = speakerphoneOn,
+                onSpeakerphoneOnChange = { viewModel.setSpeakerphoneOn(it) },
                 noiseSuppressionEnabled = noiseSuppressionEnabled,
                 onNoiseSuppressionChange = { viewModel.setNoiseSuppressionEnabled(it) },
                 echoCancellationEnabled = echoCancellationEnabled,
                 onEchoCancellationChange = { viewModel.setEchoCancellationEnabled(it) },
                 audioSource = audioSource,
                 onAudioSourceChange = { viewModel.setAudioSource(it) },
+                currentGain = audioGain,
+                onGainChange = { viewModel.setAudioGain(it) },
+                customBackgroundPath = customBackgroundPath,
+                backgroundDim = backgroundDim,
+                onSelectBackground = { viewModel.setCustomBackground(it) },
+                onClearBackground = { viewModel.clearCustomBackground() },
+                onBackgroundDimChange = { viewModel.setBackgroundDim(it) },
                 showLinkThumbnails = showLinkThumbnails,
                 onShowLinkThumbnailsChange = { viewModel.setShowLinkThumbnails(it) },
                 autoLoadImages = autoLoadImages,

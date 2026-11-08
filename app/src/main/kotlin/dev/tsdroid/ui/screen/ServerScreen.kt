@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TouchApp
@@ -114,6 +115,8 @@ import dev.tsdroid.viewmodel.ServerViewModel
 import dev.tslib.ConnectionState
 import dev.tslib.User
 import kotlinx.coroutines.flow.StateFlow
+import coil.compose.AsyncImage
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,6 +149,9 @@ fun ServerScreen(
     val showLinkThumbnails by viewModel.showLinkThumbnails.collectAsState()
     val autoLoadImages by viewModel.autoLoadImages.collectAsState()
     val appLanguage by viewModel.appLanguage.collectAsState()
+    val speakerphoneOn by viewModel.speakerphoneOn.collectAsState()
+    val customBackgroundPath by viewModel.customBackgroundPath.collectAsState()
+    val backgroundDim by viewModel.backgroundDim.collectAsState()
     val autoReconnect by viewModel.autoReconnect.collectAsState()
     val fileManagerOpen by viewModel.fileManagerOpen.collectAsState()
     val fileList by viewModel.fileList.collectAsState()
@@ -221,6 +227,8 @@ fun ServerScreen(
             vadThreshold = vadThreshold,
             onVadThresholdChange = { viewModel.setVadThreshold(it) },
             micLevel = micLevel,
+            speakerphoneOn = speakerphoneOn,
+            onSpeakerphoneOnChange = { viewModel.setSpeakerphoneOn(it) },
             noiseSuppressionEnabled = noiseSuppressionEnabled,
             onNoiseSuppressionChange = { viewModel.setNoiseSuppressionEnabled(it) },
             echoCancellationEnabled = echoCancellationEnabled,
@@ -232,6 +240,11 @@ fun ServerScreen(
             availableDevices = availableInputDevices,
             currentGain = audioGain,
             onGainChange = { viewModel.setAudioGain(it) },
+            customBackgroundPath = customBackgroundPath,
+            backgroundDim = backgroundDim,
+            onSelectBackground = { viewModel.setCustomBackground(it) },
+            onClearBackground = { viewModel.clearCustomBackground() },
+            onBackgroundDimChange = { viewModel.setBackgroundDim(it) },
             showLinkThumbnails = showLinkThumbnails,
             onShowLinkThumbnailsChange = { viewModel.setShowLinkThumbnails(it) },
             autoLoadImages = autoLoadImages,
@@ -290,6 +303,13 @@ fun ServerScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.toggleSpeakerphone() }) {
+                        Icon(
+                            if (speakerphoneOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.PhoneInTalk,
+                            contentDescription = stringResource(if (speakerphoneOn) R.string.output_speaker else R.string.output_earpiece),
+                            tint = if (speakerphoneOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(onClick = {
                         val streamer = streamingUsers.firstOrNull() ?: users.firstOrNull()
                         if (streamer != null) {
@@ -316,7 +336,7 @@ fun ServerScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = if (customBackgroundPath.isNotBlank()) MaterialTheme.colorScheme.surface.copy(alpha = 0.85f) else MaterialTheme.colorScheme.surface,
                 ),
             )
         },
@@ -324,7 +344,7 @@ fun ServerScreen(
             Surface(
                 tonalElevation = 6.dp,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                color = if (customBackgroundPath.isNotBlank()) MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.90f) else MaterialTheme.colorScheme.surfaceContainer,
             ) {
                 Row(
                     modifier = Modifier
@@ -479,6 +499,23 @@ fun ServerScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            if (customBackgroundPath.isNotBlank()) {
+                val bgFile = remember(customBackgroundPath) { File(customBackgroundPath) }
+                if (bgFile.exists()) {
+                    AsyncImage(
+                        model = bgFile,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = backgroundDim)),
+                    )
+                }
+            }
+
             Column(modifier = Modifier.fillMaxSize()) {
                 if (streamingUsers.isNotEmpty()) {
                     Card(

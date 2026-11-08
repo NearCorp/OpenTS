@@ -73,6 +73,38 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     val autoLoadImages: StateFlow<Boolean> = settingsStore.autoLoadImages
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    val audioGain: StateFlow<Float> = settingsStore.audioGain
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 1.0f)
+
+    val speakerphoneOn: StateFlow<Boolean> = settingsStore.speakerphoneOn
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val customBackgroundPath: StateFlow<String> = settingsStore.customBackgroundPath
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    val backgroundDim: StateFlow<Float> = settingsStore.backgroundDim
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0.45f)
+
+    fun setAudioGain(gain: Float) {
+        viewModelScope.launch { settingsStore.setAudioGain(gain) }
+    }
+
+    fun setSpeakerphoneOn(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setSpeakerphoneOn(enabled) }
+    }
+
+    fun setCustomBackground(uri: android.net.Uri?) {
+        viewModelScope.launch { settingsStore.setCustomBackground(uri) }
+    }
+
+    fun clearCustomBackground() {
+        viewModelScope.launch { settingsStore.clearCustomBackground() }
+    }
+
+    fun setBackgroundDim(dim: Float) {
+        viewModelScope.launch { settingsStore.setBackgroundDim(dim) }
+    }
+
     fun setAppLanguage(language: String) {
         viewModelScope.launch { settingsStore.setAppLanguage(language) }
     }

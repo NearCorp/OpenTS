@@ -31,7 +31,7 @@
     <string name="server">Сервер</string>
     <string name="disconnect">Отключиться</string>
     <string name="settings">Настройки</string>
-    <string name="audio_gain">Усиление звука</string>
+    <string name="audio_gain">Усиление микрофона</string>
     <string name="audio_gain_value">×%1$.1f</string>
     <string name="show_link_thumbnails">Миниатюры ссылок на видео</string>
     <string name="auto_load_images">Автозагрузка изображений</string>
@@ -154,4 +154,33 @@
     <string name="connect_now">Подключиться</string>
     <string name="welcome_title">OpenTS</string>
     <string name="welcome_subtitle">Быстрый и современный клиент TeamSpeak</string>
+
+    <!-- Audio Output -->
+    <string name="audio_output">Вывод звука</string>
+    <string name="output_speaker">Громкая связь (Динамик)</string>
+    <string name="output_earpiece">Разговорный динамик (В ухо)</string>
+    <string name="output_speaker_short">Динамик</string>
+    <string name="output_earpiece_short">В ухо</string>
+
+    <!-- Customization -->
+    <string name="customization">Кастомизация</string>
+    <string name="custom_background">Фоновое изображение</string>
+    <string name="choose_background">Выбрать фото</string>
+    <string name="remove_background">Сбросить фон</string>
+    <string name="background_dim">Затемнение фона</string>
+    <string name="background_dim_value">%1$d%%</string>
+
+    <!-- About OpenTS -->
+    <string name="about_app">О программе</string>
+    <string name="about_version">Версия %1$s (Сборка %2$d)</string>
+    <string name="about_desc">OpenTS — открытый современный клиент голосового протокола TeamSpeak 3 в дизайне Material You.</string>
+    <string name="about_features_title">Возможности OpenTS</string>
+    <string name="about_feature_vad">\u2022 Адаптивный VAD &amp; PTT с индикатором уровня в реальном времени</string>
+    <string name="about_feature_gain">\u2022 Усиление микрофона и выбор аудиоисточников</string>
+    <string name="about_feature_output">\u2022 Переключение вывода звука (Громкая связь / Разговорный динамик)</string>
+    <string name="about_feature_fx">\u2022 Аппаратное шумоподавление и акустическое эхоподавление</string>
+    <string name="about_feature_users">\u2022 Индивидуальная регулировка громкости пользователей</string>
+    <string name="about_feature_custom">\u2022 Персонализация темы и установка своего фото на фон</string>
+    <string name="about_feature_stream">\u2022 Просмотр трансляций экрана и обмен файлами</string>
+    <string name="about_stack">Разработано на Kotlin, Jetpack Compose и Rust tslib core.</string>
 </resources>

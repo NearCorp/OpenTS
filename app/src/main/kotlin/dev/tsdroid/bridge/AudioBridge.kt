@@ -13,6 +13,7 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import dev.tsdroid.R
@@ -130,6 +131,9 @@ class AudioBridge(
     private val _isMuted = MutableStateFlow(false)
     val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
 
+    private val _isSpeakerphoneOn = MutableStateFlow(true)
+    val isSpeakerphoneOn: StateFlow<Boolean> = _isSpeakerphoneOn.asStateFlow()
+
     private val _isCapturing = MutableStateFlow(false)
     val isCapturing: StateFlow<Boolean> = _isCapturing.asStateFlow()
 
@@ -182,6 +186,9 @@ class AudioBridge(
         // Attach hardware audio effects if supported
         initAudioEffects(record.audioSessionId)
 
+        // Ensure proper audio routing when capture starts
+        applySpeakerphoneRouting(_isSpeakerphoneOn.value)
+
         record.startRecording()
         _isCapturing.value = true
 
@@ -193,7 +200,17 @@ class AudioBridge(
             while (isActive && _isCapturing.value) {
                 val read = audioRecord?.read(buffer, 0, FRAME_SIZE_SAMPLES) ?: break
                 if (read == FRAME_SIZE_SAMPLES) {
-                    // Compute RMS energy
+                    // Apply microphone gain
+                    val gain = gainFactor
+                    if (gain != 1.0f) {
+                        for (i in 0 until read) {
+                            buffer[i] = (buffer[i] * gain).toInt()
+                                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                                .toShort()
+                        }
+                    }
+
+                    // Compute RMS energy on amplified buffer
                     var sumSquares = 0.0
                     for (i in 0 until read) {
                         val s = buffer[i].toDouble()
@@ -291,7 +308,7 @@ class AudioBridge(
         audioTrack = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_GAME)
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
@@ -306,6 +323,7 @@ class AudioBridge(
             .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
             .build()
         audioTrack?.play()
+        applySpeakerphoneRouting(_isSpeakerphoneOn.value)
     }
 
     /**
@@ -348,14 +366,6 @@ class AudioBridge(
                 }
 
                 if (hasData) {
-                    val gain = gainFactor
-                    if (gain != 1.0f) {
-                        for (i in mixBuffer.indices) {
-                            mixBuffer[i] = (mixBuffer[i] * gain).toInt()
-                                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-                                .toShort()
-                        }
-                    }
                     val bytes = shortsToBytes(mixBuffer)
                     audioTrack?.write(bytes, 0, bytes.size)
                 } else {
@@ -410,6 +420,41 @@ class AudioBridge(
         }
     }
 
+    fun setSpeakerphoneOn(enabled: Boolean) {
+        _isSpeakerphoneOn.value = enabled
+        applySpeakerphoneRouting(enabled)
+    }
+
+    fun toggleSpeakerphone() {
+        setSpeakerphoneOn(!_isSpeakerphoneOn.value)
+    }
+
+    fun applySpeakerphoneRouting(speakerphone: Boolean = _isSpeakerphoneOn.value) {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        try {
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val targetType = if (speakerphone) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                } else {
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                }
+                val targetDevice = audioManager.availableCommunicationDevices.firstOrNull { it.type == targetType }
+                if (targetDevice != null) {
+                    val res = audioManager.setCommunicationDevice(targetDevice)
+                    Log.i(TAG, "setCommunicationDevice(${targetDevice.productName}, type=$targetType): $res")
+                } else if (!speakerphone) {
+                    audioManager.clearCommunicationDevice()
+                }
+            }
+            @Suppress("DEPRECATION")
+            audioManager.isSpeakerphoneOn = speakerphone
+            Log.i(TAG, "applySpeakerphoneRouting: speakerphone=$speakerphone, mode=${audioManager.mode}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply speakerphone routing", e)
+        }
+    }
+
     fun getAvailableInputDevices(): List<InputDeviceInfo> {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return emptyList()
         val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
@@ -446,6 +491,16 @@ class AudioBridge(
         userDecoders.clear()
         userQueues.clear()
         userVolumes.clear()
+
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager?.clearCommunicationDevice()
+            }
+            @Suppress("DEPRECATION")
+            audioManager?.isSpeakerphoneOn = false
+            audioManager?.mode = AudioManager.MODE_NORMAL
+        } catch (_: Exception) {}
     }
 
     private fun shortsToBytes(shorts: ShortArray): ByteArray {
