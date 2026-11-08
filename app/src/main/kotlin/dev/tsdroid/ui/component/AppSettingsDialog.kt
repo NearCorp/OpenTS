@@ -1,6 +1,8 @@
 package dev.tsdroid.ui.component
 
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
@@ -100,6 +103,13 @@ fun AppSettingsDialog(
     var vadSlider by remember(vadThreshold) { mutableFloatStateOf(vadThreshold) }
     var gainSlider by remember(currentGain) { mutableFloatStateOf(currentGain ?: 1.0f) }
     var dimSlider by remember(backgroundDim) { mutableFloatStateOf(backgroundDim) }
+
+    val isAecSupported = remember {
+        try { AcousticEchoCanceler.isAvailable() } catch (_: Exception) { false }
+    }
+    val isNsSupported = remember {
+        try { NoiseSuppressor.isAvailable() } catch (_: Exception) { false }
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -358,11 +368,17 @@ fun AppSettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = stringResource(R.string.echo_cancellation),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.echo_cancellation),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = stringResource(if (isAecSupported) R.string.fx_hardware_supported else R.string.fx_hardware_unsupported),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isAecSupported) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                    }
                     Switch(
                         checked = echoCancellationEnabled,
                         onCheckedChange = onEchoCancellationChange,
@@ -373,11 +389,17 @@ fun AppSettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = stringResource(R.string.noise_suppression),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.noise_suppression),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = stringResource(if (isNsSupported) R.string.fx_hardware_supported else R.string.fx_hardware_unsupported),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isNsSupported) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                    }
                     Switch(
                         checked = noiseSuppressionEnabled,
                         onCheckedChange = onNoiseSuppressionChange,
@@ -577,18 +599,37 @@ fun AppSettingsDialog(
                     shape = RoundedCornerShape(12.dp),
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = "OpenTS",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = "OpenTS",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = stringResource(R.string.about_creator),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                         Text(
                             text = stringResource(R.string.about_version, "1.0.0", 1),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.about_license),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = stringResource(R.string.about_desc),
                             style = MaterialTheme.typography.bodySmall,
@@ -626,6 +667,29 @@ fun AppSettingsDialog(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline,
                         )
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = null,
+                                tint = Color(0xFFE91E63),
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.about_cute_quote),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
                     }
                 }
             }

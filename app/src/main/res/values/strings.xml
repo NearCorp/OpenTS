@@ -182,5 +182,10 @@
     <string name="about_feature_users">\u2022 Per-user volume control and individual muting</string>
     <string name="about_feature_custom">\u2022 Custom background wallpaper and UI customization</string>
     <string name="about_feature_stream">\u2022 Screen share stream viewer and channel file manager</string>
+    <string name="about_creator">Creator: NearCorp</string>
+    <string name="about_license">License: GNU GPLv3 (Open Source)</string>
+    <string name="about_cute_quote">Made with love for cozy voice chats :3</string>
+    <string name="fx_hardware_supported">Hardware DSP effect active</string>
+    <string name="fx_hardware_unsupported">Not supported by device hardware</string>
     <string name="about_stack">Built with Kotlin, Jetpack Compose, and Rust tslib core.</string>
 </resources>

@@ -182,5 +182,10 @@
     <string name="about_feature_users">\u2022 Индивидуальная регулировка громкости пользователей</string>
     <string name="about_feature_custom">\u2022 Персонализация темы и установка своего фото на фон</string>
     <string name="about_feature_stream">\u2022 Просмотр трансляций экрана и обмен файлами</string>
+    <string name="about_creator">Создатель: NearCorp</string>
+    <string name="about_license">Лицензия: GNU GPLv3 (Open Source)</string>
+    <string name="about_cute_quote">Сделано с любовью и теплом для уютных посиделок в войсе :3</string>
+    <string name="fx_hardware_supported">Аппаратная поддержка активна</string>
+    <string name="fx_hardware_unsupported">Аппаратно не поддерживается процессором</string>
     <string name="about_stack">Разработано на Kotlin, Jetpack Compose и Rust tslib core.</string>
 </resources>

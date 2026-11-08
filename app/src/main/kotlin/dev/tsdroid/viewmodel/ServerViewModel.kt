@@ -322,10 +322,6 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                         if (privateMsgs.isNotEmpty()) _privateMessages.value = privateMsgs.mapValues { (_, msgs) -> msgs.map { migrateMessage(it) } }
                     }
                 }
-                // Start audio capture if not already running
-                if (!binder.audioBridge.isCapturing.value) {
-                    binder.audioBridge.startCapture(viewModelScope)
-                }
                 // Apply persisted audio settings
                 binder.audioBridge.gainFactor = audioGain.value
                 binder.audioBridge.setSpeakerphoneOn(speakerphoneOn.value)
@@ -338,6 +334,11 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 binder.audioBridge.isAecEnabled = echoCancellationEnabled.value
                 binder.audioBridge.setMuted(false)
                 _availableInputDevices.value = binder.audioBridge.getAvailableInputDevices()
+
+                // Start audio capture if not already running
+                if (!binder.audioBridge.isCapturing.value) {
+                    binder.audioBridge.startCapture(viewModelScope)
+                }
 
                 // Restore individual user volumes
                 _userVolumes.value.forEach { (userId, vol) ->
