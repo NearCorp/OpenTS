@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -14,6 +15,8 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import dev.tsdroid.R
@@ -145,8 +148,72 @@ class AudioBridge(
     private val _isVoiceActive = MutableStateFlow(false)
     val isVoiceActive: StateFlow<Boolean> = _isVoiceActive.asStateFlow()
 
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            Log.i(TAG, "Audio devices added: ${addedDevices?.joinToString { "${it.productName} (${it.type})" }}")
+            handleAudioDeviceChanged()
+        }
+
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+            Log.i(TAG, "Audio devices removed: ${removedDevices?.joinToString { "${it.productName} (${it.type})" }}")
+            handleAudioDeviceChanged()
+        }
+    }
+
+    private fun handleAudioDeviceChanged() {
+        applySpeakerphoneRouting(_isSpeakerphoneOn.value)
+        initAudioTrack(_isSpeakerphoneOn.value)
+        restartCapture()
+    }
+
+    fun getConnectedHeadsetOutputDevice(): AudioDeviceInfo? {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return null
+        val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        return devices.firstOrNull { dev ->
+            when (dev.type) {
+                AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                AudioDeviceInfo.TYPE_USB_HEADSET,
+                AudioDeviceInfo.TYPE_USB_DEVICE,
+                AudioDeviceInfo.TYPE_HEARING_AID -> true
+                else -> {
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && (
+                        dev.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                        dev.type == AudioDeviceInfo.TYPE_BLE_SPEAKER
+                    )
+                }
+            }
+        }
+    }
+
+    fun getConnectedHeadsetInputDevice(): AudioDeviceInfo? {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return null
+        val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+        return devices.firstOrNull { dev ->
+            when (dev.type) {
+                AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                AudioDeviceInfo.TYPE_USB_HEADSET,
+                AudioDeviceInfo.TYPE_USB_DEVICE -> true
+                else -> {
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dev.type == AudioDeviceInfo.TYPE_BLE_HEADSET
+                }
+            }
+        }
+    }
+
+    fun isHeadsetConnected(): Boolean = getConnectedHeadsetOutputDevice() != null
+
     fun initialize() {
         encoder = OpusCodec(audioConfig)
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        try {
+            audioManager?.registerAudioDeviceCallback(audioDeviceCallback, Handler(Looper.getMainLooper()))
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to register AudioDeviceCallback", e)
+        }
         applySpeakerphoneRouting(_isSpeakerphoneOn.value)
         initAudioTrack(_isSpeakerphoneOn.value)
         startPlaybackLoop()
@@ -175,11 +242,18 @@ class AudioBridge(
             maxOf(minBuf, FRAME_SIZE_BYTES * 4),
         )
 
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         if (preferredInputDeviceId != -1) {
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             val dev = audioManager?.getDevices(AudioManager.GET_DEVICES_INPUTS)?.find { it.id == preferredInputDeviceId }
             if (dev != null) {
                 record.setPreferredDevice(dev)
+            }
+        } else {
+            // Automatically select headset microphone if connected!
+            val headsetMic = getConnectedHeadsetInputDevice()
+            if (headsetMic != null) {
+                val ok = record.setPreferredDevice(headsetMic)
+                Log.i(TAG, "AudioRecord setPreferredDevice to headset mic: ${headsetMic.productName} (${headsetMic.type}) success=$ok")
             }
         }
 
@@ -200,7 +274,13 @@ class AudioBridge(
             var hangoverRemaining = 0
 
             while (isActive && _isCapturing.value) {
-                val read = audioRecord?.read(buffer, 0, FRAME_SIZE_SAMPLES) ?: break
+                val currentRecord = audioRecord ?: break
+                val read = currentRecord.read(buffer, 0, FRAME_SIZE_SAMPLES)
+                if (read < 0) {
+                    Log.w(TAG, "AudioRecord read returned error: $read")
+                    delay(20)
+                    continue
+                }
                 if (read == FRAME_SIZE_SAMPLES) {
                     // Apply microphone gain
                     val gain = gainFactor
@@ -315,9 +395,15 @@ class AudioBridge(
             AudioFormat.ENCODING_PCM_16BIT,
         )
 
-        // For speakerphone (loud speakers), USAGE_MEDIA guarantees Android plays through external loud speakers!
-        // For earpiece (in-ear), USAGE_VOICE_COMMUNICATION routes to the in-call earpiece.
-        val usage = if (speakerphone) AudioAttributes.USAGE_MEDIA else AudioAttributes.USAGE_VOICE_COMMUNICATION
+        val headsetOut = getConnectedHeadsetOutputDevice()
+
+        // When a headset is connected, USAGE_VOICE_COMMUNICATION routes directly into the headset.
+        // When no headset: speakerphone uses USAGE_MEDIA (forces loud speakers) or USAGE_VOICE_COMMUNICATION (earpiece)
+        val usage = when {
+            headsetOut != null -> AudioAttributes.USAGE_VOICE_COMMUNICATION
+            speakerphone -> AudioAttributes.USAGE_MEDIA
+            else -> AudioAttributes.USAGE_VOICE_COMMUNICATION
+        }
 
         val track = AudioTrack.Builder()
             .setAudioAttributes(
@@ -339,14 +425,19 @@ class AudioBridge(
 
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         if (audioManager != null) {
-            val targetType = if (speakerphone) {
-                AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+            if (headsetOut != null) {
+                val ok = track.setPreferredDevice(headsetOut)
+                Log.i(TAG, "AudioTrack setPreferredDevice to headset: ${headsetOut.productName} (${headsetOut.type}) success=$ok")
             } else {
-                AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
-            }
-            val targetDevice = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == targetType }
-            if (targetDevice != null) {
-                track.setPreferredDevice(targetDevice)
+                val targetType = if (speakerphone) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                } else {
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                }
+                val targetDevice = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == targetType }
+                if (targetDevice != null) {
+                    track.setPreferredDevice(targetDevice)
+                }
             }
         }
 
@@ -465,38 +556,64 @@ class AudioBridge(
     fun applySpeakerphoneRouting(speakerphone: Boolean = _isSpeakerphoneOn.value) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
         try {
-            if (speakerphone) {
-                audioManager.mode = AudioManager.MODE_NORMAL
-                @Suppress("DEPRECATION")
-                audioManager.isSpeakerphoneOn = true
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+
+            val headsetOut = getConnectedHeadsetOutputDevice()
+            if (headsetOut != null) {
+                // A headset (Bluetooth, Wired, USB) is connected — route audio to it!
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val targetDevice = audioManager.availableCommunicationDevices.firstOrNull {
-                        it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                    val commDevice = audioManager.availableCommunicationDevices.firstOrNull { dev ->
+                        dev.type == headsetOut.type || dev.type in setOf(
+                            AudioDeviceInfo.TYPE_BLE_HEADSET,
+                            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                            AudioDeviceInfo.TYPE_USB_HEADSET
+                        )
                     }
-                    if (targetDevice != null) {
-                        val res = audioManager.setCommunicationDevice(targetDevice)
-                        Log.i(TAG, "setCommunicationDevice(SPEAKER): $res")
+                    if (commDevice != null) {
+                        val res = audioManager.setCommunicationDevice(commDevice)
+                        Log.i(TAG, "setCommunicationDevice(HEADSET: ${commDevice.productName} type=${commDevice.type}): $res")
                     } else {
                         audioManager.clearCommunicationDevice()
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager.isSpeakerphoneOn = false
+                    if (headsetOut.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        headsetOut.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                    ) {
+                        @Suppress("DEPRECATION")
+                        audioManager.startBluetoothSco()
+                        @Suppress("DEPRECATION")
+                        audioManager.isBluetoothScoOn = true
                     }
                 }
             } else {
-                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                @Suppress("DEPRECATION")
-                audioManager.isSpeakerphoneOn = false
+                // No headset connected — switch between phone's loud speaker and earpiece
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    val targetDevice = audioManager.availableCommunicationDevices.firstOrNull {
-                        it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                    val targetType = if (speakerphone) {
+                        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                    } else {
+                        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
                     }
+                    val targetDevice = audioManager.availableCommunicationDevices.firstOrNull { it.type == targetType }
                     if (targetDevice != null) {
                         val res = audioManager.setCommunicationDevice(targetDevice)
-                        Log.i(TAG, "setCommunicationDevice(EARPIECE): $res")
+                        Log.i(TAG, "setCommunicationDevice(${if (speakerphone) "SPEAKER" else "EARPIECE"}): $res")
                     } else {
                         audioManager.clearCommunicationDevice()
                     }
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager.stopBluetoothSco()
+                    @Suppress("DEPRECATION")
+                    audioManager.isBluetoothScoOn = false
+                    @Suppress("DEPRECATION")
+                    audioManager.isSpeakerphoneOn = speakerphone
                 }
             }
-            Log.i(TAG, "applySpeakerphoneRouting: speakerphone=$speakerphone, mode=${audioManager.mode}")
+            Log.i(TAG, "applySpeakerphoneRouting: speakerphone=$speakerphone, headset=${headsetOut?.type}, mode=${audioManager.mode}")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to apply speakerphone routing", e)
         }
@@ -541,8 +658,16 @@ class AudioBridge(
 
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         try {
+            audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
+        } catch (_: Exception) {}
+        try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 audioManager?.clearCommunicationDevice()
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.stopBluetoothSco()
+                @Suppress("DEPRECATION")
+                audioManager?.isBluetoothScoOn = false
             }
             @Suppress("DEPRECATION")
             audioManager?.isSpeakerphoneOn = false
