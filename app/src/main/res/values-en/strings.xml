@@ -190,4 +190,9 @@
     <string name="fx_hardware_supported">Hardware DSP effect active</string>
     <string name="fx_hardware_unsupported">Not supported by device hardware</string>
     <string name="about_stack">Built with Kotlin, Jetpack Compose, and Rust tslib core.</string>
+
+    <!-- Error messages -->
+    <string name="error_not_connected">Not connected to server</string>
+    <string name="error_download_failed">File download failed</string>
+    <string name="bookmark_saved">Bookmark saved</string>
 </resources>

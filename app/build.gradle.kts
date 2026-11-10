@@ -21,9 +21,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("${rootDir}/release.keystore")
-            storePassword = "opents"
-            keyAlias = "opents"
-            keyPassword = "opents"
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "opents"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "opents"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "opents"
         }
     }
 
@@ -51,6 +51,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     sourceSets {

@@ -152,6 +152,7 @@ class AudioBridge(
         startPlaybackLoop()
     }
 
+    @Synchronized
     @SuppressLint("MissingPermission")
     fun startCapture(scope: CoroutineScope) {
         if (_isCapturing.value) return
@@ -288,6 +289,7 @@ class AudioBridge(
         } catch (_: Exception) {}
     }
 
+    @Synchronized
     fun stopCapture() {
         _isCapturing.value = false
         _micLevel.value = 0f
@@ -443,8 +445,10 @@ class AudioBridge(
     fun restartCapture() {
         val scope = captureScope ?: return
         if (_isCapturing.value) {
-            stopCapture()
-            startCapture(scope)
+            scope.launch(Dispatchers.IO) {
+                stopCapture()
+                startCapture(scope)
+            }
         }
     }
 

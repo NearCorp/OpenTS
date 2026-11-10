@@ -177,19 +177,19 @@ class TsClient {
 
     private fun refreshState() {
         try {
-            val (chs, usrs, srv, st) = synchronized(nativeLock) {
+            val snapshot = synchronized(nativeLock) {
                 val c = client ?: return
                 val channels = c.channels?.filterNotNull() ?: emptyList()
                 val users = c.users?.filterNotNull() ?: emptyList()
                 val sInfo = c.serverInfo
                 val state = c.state
                 Tuple4(channels, users, sInfo, state)
-            } ?: return
+            }
 
-            _channels.value = chs
-            _users.value = usrs
-            _serverInfo.value = srv
-            if (_state.value != st) _state.value = st
+            _channels.value = snapshot.a
+            _users.value = snapshot.b
+            _serverInfo.value = snapshot.c
+            if (_state.value != snapshot.d) _state.value = snapshot.d
         } catch (e: Exception) {
             Log.w(TAG, "refreshState failed", e)
         }
@@ -359,9 +359,15 @@ class TsClient {
         val c = client ?: return
         client = null
 
+        // Wait for eventLoop to stop — always called from Dispatchers.IO (TsConnectionService.disconnect),
+        // so Thread.sleep here is safe and will not cause ANR on Main thread.
         val deadline = System.currentTimeMillis() + 1000
-        while (eventLoopRunning.get() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(20)
+        try {
+            while (eventLoopRunning.get() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(20)
+            }
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
         eventLoopRunning.set(false)
 

@@ -190,4 +190,9 @@
     <string name="fx_hardware_supported">Аппаратная поддержка активна</string>
     <string name="fx_hardware_unsupported">Аппаратно не поддерживается процессором</string>
     <string name="about_stack">Разработано на Kotlin, Jetpack Compose и Rust tslib core.</string>
+
+    <!-- Error messages -->
+    <string name="error_not_connected">Нет подключения к серверу</string>
+    <string name="error_download_failed">Не удалось загрузить файл</string>
+    <string name="bookmark_saved">Закладка сохранена</string>
 </resources>

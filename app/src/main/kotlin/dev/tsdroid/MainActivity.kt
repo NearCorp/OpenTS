@@ -19,6 +19,7 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val settingsStore by lazy { SettingsStore(applicationContext) }
+    private var lastHandledLanguage: String? = null
 
     override fun attachBaseContext(newBase: Context) {
         val prefs = newBase.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
@@ -38,10 +39,17 @@ class MainActivity : ComponentActivity() {
             val appLanguage by settingsStore.appLanguage.collectAsState(initial = settingsStore.appLanguageSync)
 
             LaunchedEffect(appLanguage) {
-                val currentLang = resources.configuration.locales[0].language
-                val targetLang = getLocaleForLanguage(appLanguage).language
-                if (!currentLang.equals(targetLang, ignoreCase = true)) {
-                    recreate()
+                if (lastHandledLanguage == null) {
+                    lastHandledLanguage = appLanguage
+                    return@LaunchedEffect
+                }
+                if (lastHandledLanguage != appLanguage) {
+                    lastHandledLanguage = appLanguage
+                    val currentLang = resources.configuration.locales.takeIf { !it.isEmpty }?.get(0)?.language ?: ""
+                    val targetLang = getLocaleForLanguage(appLanguage).language
+                    if (!currentLang.equals(targetLang, ignoreCase = true)) {
+                        recreate()
+                    }
                 }
             }
 

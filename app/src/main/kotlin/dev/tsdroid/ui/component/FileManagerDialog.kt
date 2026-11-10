@@ -512,10 +512,10 @@ private fun isImageFile(name: String): Boolean {
 
 private fun formatFileSize(bytes: Long): String {
     return when {
-        bytes < 1024 -> "$bytes o"
-        bytes < 1024 * 1024 -> "%.1f Ko".format(bytes / 1024.0)
-        bytes < 1024 * 1024 * 1024 -> "%.1f Mo".format(bytes / (1024.0 * 1024.0))
-        else -> "%.1f Go".format(bytes / (1024.0 * 1024.0 * 1024.0))
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
+        bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+        else -> "%.1f GB".format(bytes / (1024.0 * 1024.0 * 1024.0))
     }
 }
 

@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import dev.tsdroid.BuildConfig
 import dev.tsdroid.R
 import dev.tsdroid.bridge.InputDeviceInfo
 import java.io.File
@@ -618,7 +619,7 @@ fun AppSettingsDialog(
                             )
                         }
                         Text(
-                            text = stringResource(R.string.about_version, "1.0.0", 1),
+                            text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

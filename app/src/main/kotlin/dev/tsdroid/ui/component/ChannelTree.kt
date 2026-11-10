@@ -149,25 +149,28 @@ private fun buildTreeItems(channels: List<Channel>, users: List<User>): List<Tre
     if (safeChannels.isEmpty()) return emptyList()
 
     val tree = JChannelTree.fromChannels(safeChannels.toTypedArray())
-    val usersByChannel = safeUsers.groupBy { it.channelId }
+    try {
+        val usersByChannel = safeUsers.groupBy { it.channelId }
 
-    Log.d("ChannelTree", "usersByChannel keys: ${usersByChannel.keys}, channel ids: ${safeChannels.map { it.id }}")
+        Log.d("ChannelTree", "usersByChannel keys: ${usersByChannel.keys}, channel ids: ${safeChannels.map { it.id }}")
 
-    val items = mutableListOf<TreeItem>()
+        val items = mutableListOf<TreeItem>()
 
-    fun addChannel(channel: Channel, depth: Int) {
-        items.add(TreeItem.ChannelNode(channel, depth))
-        // Add users in this channel
-        usersByChannel[channel.id]?.forEach { user ->
-            items.add(TreeItem.UserNode(user, depth + 1))
+        fun addChannel(channel: Channel, depth: Int) {
+            items.add(TreeItem.ChannelNode(channel, depth))
+            // Add users in this channel
+            usersByChannel[channel.id]?.forEach { user ->
+                items.add(TreeItem.UserNode(user, depth + 1))
+            }
+            // Add sub-channels (filter nulls from JNI array)
+            tree.getChildren(channel.id)?.filterNotNull()?.forEach { child ->
+                addChannel(child, depth + 1)
+            }
         }
-        // Add sub-channels (filter nulls from JNI array)
-        tree.getChildren(channel.id)?.filterNotNull()?.forEach { child ->
-            addChannel(child, depth + 1)
-        }
+
+        tree.roots?.filterNotNull()?.forEach { root -> addChannel(root, 0) }
+        return items
+    } finally {
+        tree.close()
     }
-
-    tree.roots?.filterNotNull()?.forEach { root -> addChannel(root, 0) }
-    tree.close()
-    return items
 }

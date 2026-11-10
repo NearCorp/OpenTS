@@ -141,6 +141,7 @@ fun ConnectionScreen(
 
     var showSettings by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val bookmarkSavedMsg = stringResource(R.string.bookmark_saved)
     var deleteConfirmIndex by remember { mutableStateOf<Int?>(null) }
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -352,7 +353,7 @@ fun ConnectionScreen(
                         FilledTonalButton(
                             onClick = {
                                 viewModel.saveBookmark()
-                                scope.launch { snackbarHostState.showSnackbar("Закладка сохранена") }
+                                scope.launch { snackbarHostState.showSnackbar(bookmarkSavedMsg) }
                             },
                             shape = RoundedCornerShape(12.dp),
                             enabled = address.isNotBlank() && nickname.isNotBlank(),

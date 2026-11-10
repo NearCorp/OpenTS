@@ -860,11 +860,24 @@ private fun ChatPanel(
     onUploadFile: (String, ByteArray) -> Unit,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
     val filePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            // Handled via context
+            try {
+                val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst() && nameIdx != -1) cursor.getString(nameIdx) else null
+                } ?: uri.lastPathSegment ?: "file_${System.currentTimeMillis()}"
+
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes != null && bytes.isNotEmpty()) {
+                    onUploadFile(fileName, bytes)
+                }
+            } catch (e: Exception) {
+                Log.w("ChatPanel", "Failed to upload file from uri", e)
+            }
         }
     }
 
@@ -979,6 +992,16 @@ private fun ChatPanel(
                     shape = RoundedCornerShape(24.dp),
                     enabled = chatTab == 0 || pmTarget != null,
                 )
+                IconButton(
+                    onClick = { filePickerLauncher.launch("*/*") },
+                    enabled = chatTab == 0 || pmTarget != null,
+                ) {
+                    Icon(
+                        Icons.Default.AttachFile,
+                        contentDescription = "Attach file",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.width(4.dp))
                 IconButton(
                     onClick = onSend,

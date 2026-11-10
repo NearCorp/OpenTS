@@ -52,27 +52,21 @@ class AvatarCache(private val cacheDir: File) {
             // UID contains / and = which are invalid in filenames — URL-encode for disk cache
             val safeFileName = URLEncoder.encode(uid, "UTF-8")
             val diskFile = File(avatarsDir, safeFileName)
-            var bytes: ByteArray? = null
-            var fromDisk = false
-
             // Try disk cache first
             if (diskFile.exists() && diskFile.length() > 0) {
-                bytes = diskFile.readBytes()
-                fromDisk = true
-                Log.d(TAG, "Read avatar from disk for $uid (${bytes.size} bytes)")
-            }
-
-            // Try decoding if we have disk data
-            if (fromDisk && bytes != null) {
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                if (bitmap != null) {
-                    memoryCache[uid] = bitmap.asImageBitmap()
-                    Log.d(TAG, "Loaded avatar from disk cache for $uid")
-                    return
+                bytes = try { diskFile.readBytes() } catch (_: Exception) { null }
+                if (bytes != null) {
+                    Log.d(TAG, "Read avatar from disk for $uid (${bytes.size} bytes)")
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null) {
+                        memoryCache[uid] = bitmap.asImageBitmap()
+                        Log.d(TAG, "Loaded avatar from disk cache for $uid")
+                        return
+                    }
+                    Log.w(TAG, "Corrupt avatar on disk for $uid, deleting and re-downloading")
+                    diskFile.delete()
+                    bytes = null
                 }
-                Log.w(TAG, "Corrupt avatar on disk for $uid, deleting and re-downloading")
-                diskFile.delete()
-                bytes = null
             }
 
             // Download from server using UID-based path

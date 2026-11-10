@@ -86,8 +86,12 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     private val fileCache = FileCache(application)
     private var serverAddress: String? = null
     private var saveJob: Job? = null
-    // In-memory cache: avoids re-reading from disk + re-decoding for the same image
-    private val downloadCache = mutableMapOf<String, StateFlow<DownloadState>>()
+    // In-memory LRU cache (max 50 entries): avoids re-reading from disk + re-decoding for the same image
+    private val downloadCache = object : LinkedHashMap<String, StateFlow<DownloadState>>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, StateFlow<DownloadState>>?): Boolean {
+            return size > 50
+        }
+    }
 
     private var tsClient: TsClient? = null
     private var audioBridge: AudioBridge? = null
@@ -209,12 +213,14 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
     }.stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
 
     // Track which channels we've already queried permissions for
-    private val queriedPermChannels = mutableSetOf<Long>()
+    // Using Collections.synchronizedSet to prevent ConcurrentModificationException
+    private val queriedPermChannels = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
 
     // Track chat visibility to avoid incrementing unread for visible tab
-    var isChatOpen = false
-    var activeChatTab = 0
-    var activePmUserId: Int? = null
+    // Using @Volatile to ensure visibility across coroutines
+    @Volatile var isChatOpen = false
+    @Volatile var activeChatTab = 0
+    @Volatile var activePmUserId: Int? = null
 
     private var serviceConnection: ServiceConnection? = null
     private var bound = false
@@ -335,9 +341,9 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 binder.audioBridge.setMuted(false)
                 _availableInputDevices.value = binder.audioBridge.getAvailableInputDevices()
 
-                // Start audio capture if not already running
+                // Start audio capture in serviceScope so background voice remains active
                 if (!binder.audioBridge.isCapturing.value) {
-                    binder.audioBridge.startCapture(viewModelScope)
+                    binder.audioBridge.startCapture(binder.serviceScope)
                 }
 
                 // Restore individual user volumes
@@ -355,8 +361,8 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                     binder.audioBridge.isMuted.collect { _isMuted.value = it }
                 }
 
-                // Start event loop (guarded by AtomicBoolean — safe if already running)
-                viewModelScope.launch {
+                // Start event loop in serviceScope so connection processing continues when UI is backgrounded
+                binder.serviceScope.launch {
                     binder.tsClient.eventLoop()
                 }
             }
@@ -732,7 +738,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
         val state = MutableStateFlow<DownloadState>(DownloadState.Downloading)
         val client = tsClient ?: run {
-            state.value = DownloadState.Error("Pas connecté")
+            state.value = DownloadState.Error(getApplication<Application>().getString(R.string.error_not_connected))
             return state
         }
         val channelId = if (attachment.channelId != 0L) attachment.channelId else currentChannelId()
@@ -760,7 +766,7 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
                 }
             } else {
                 downloadCache.remove(cacheKey)
-                state.value = DownloadState.Error("Échec du téléchargement")
+                state.value = DownloadState.Error(getApplication<Application>().getString(R.string.error_download_failed))
             }
         }
         return state

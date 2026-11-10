@@ -116,7 +116,7 @@ class SettingsStore(private val context: Context) {
         context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
             .edit()
             .putString("app_language", language)
-            .commit()
+            .apply()
         context.settingsDataStore.edit { it[KEY_APP_LANGUAGE] = language }
     }
 

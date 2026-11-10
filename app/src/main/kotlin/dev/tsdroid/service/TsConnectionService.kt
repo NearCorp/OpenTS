@@ -45,6 +45,7 @@ class TsConnectionService : Service() {
         val tsClient: TsClient get() = this@TsConnectionService.tsClient
         val audioBridge: AudioBridge get() = this@TsConnectionService.audioBridge
         val service: TsConnectionService get() = this@TsConnectionService
+        val serviceScope: CoroutineScope get() = this@TsConnectionService.serviceScope
     }
 
     private val binder = LocalBinder()

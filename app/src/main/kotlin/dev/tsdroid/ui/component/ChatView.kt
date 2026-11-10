@@ -20,6 +20,7 @@ import dev.tsdroid.viewmodel.ChatMessage
 import dev.tsdroid.viewmodel.DownloadState
 import dev.tsdroid.viewmodel.FileAttachment
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val INITIAL_PAGE = 15
 private const val PAGE_SIZE = 20
@@ -54,7 +55,7 @@ fun ChatView(
             val info = listState.layoutInfo
             val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
             lastVisible to info.totalItemsCount
-        }.collect { (lastVisible, totalItems) ->
+        }.distinctUntilChanged().collect { (lastVisible, totalItems) ->
             if (totalItems > 0 && lastVisible >= totalItems - 3 && visibleCount < totalMessages) {
                 visibleCount = (visibleCount + PAGE_SIZE).coerceAtMost(totalMessages)
             }

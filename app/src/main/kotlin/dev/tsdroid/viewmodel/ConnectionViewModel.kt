@@ -163,22 +163,26 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun loadBookmarkIcons(bookmarks: List<ServerBookmark>) {
-        val iconsDir = File(getApplication<Application>().cacheDir, "icons")
-        if (!iconsDir.exists()) return
-        val newIcons = mutableMapOf<Long, ImageBitmap>()
-        for (b in bookmarks) {
-            if (b.iconId == 0L) continue
-            if (_bookmarkIcons.value.containsKey(b.iconId)) continue
-            val file = File(iconsDir, b.iconId.toString())
-            if (file.exists() && file.length() > 0) {
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                if (bitmap != null) {
-                    newIcons[b.iconId] = bitmap.asImageBitmap()
+        viewModelScope.launch(Dispatchers.IO) {
+            val iconsDir = File(getApplication<Application>().cacheDir, "icons")
+            if (!iconsDir.exists()) return@launch
+            val newIcons = mutableMapOf<Long, ImageBitmap>()
+            for (b in bookmarks) {
+                if (b.iconId == 0L) continue
+                if (_bookmarkIcons.value.containsKey(b.iconId)) continue
+                val file = File(iconsDir, b.iconId.toString())
+                if (file.exists() && file.length() > 0) {
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                    if (bitmap != null) {
+                        newIcons[b.iconId] = bitmap.asImageBitmap()
+                    }
                 }
             }
-        }
-        if (newIcons.isNotEmpty()) {
-            _bookmarkIcons.value = _bookmarkIcons.value + newIcons
+            if (newIcons.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    _bookmarkIcons.value = _bookmarkIcons.value + newIcons
+                }
+            }
         }
     }
 
@@ -203,6 +207,14 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
         _error.value = null
 
         val context = getApplication<Application>()
+
+        // Unbind any existing ServiceConnection before creating a new one (prevents leak)
+        serviceConnection?.let { existing ->
+            try { context.unbindService(existing) } catch (_: Exception) {}
+        }
+        serviceBinder = null
+        serviceConnection = null
+
         TsConnectionService.start(context)
 
         val conn = object : ServiceConnection {
@@ -371,8 +383,11 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     fun selectChannel(channelId: Long) {
         val channels = browsedChannels.value
         val tree = ChannelTree.fromChannels(channels.toTypedArray())
-        val path = tree.pathTo(channelId)
-        tree.close()
+        val path = try {
+            tree.pathTo(channelId)
+        } finally {
+            tree.close()
+        }
         channel.value = path.joinToString("/") { it.name }
         showChannelPicker.value = false
     }

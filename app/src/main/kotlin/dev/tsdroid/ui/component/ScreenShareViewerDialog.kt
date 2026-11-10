@@ -106,6 +106,14 @@ fun ScreenShareViewerDialog(
             dismissOnClickOutside = !isFullscreen,
         ),
     ) {
+        // Stop video playback when this Dialog leaves composition
+        DisposableEffect(Unit) {
+            onDispose {
+                videoViewRef?.stopPlayback()
+                videoViewRef = null
+            }
+        }
+
         Surface(
             modifier = if (isFullscreen) Modifier.fillMaxSize() else Modifier
                 .fillMaxWidth()
@@ -259,7 +267,21 @@ fun ScreenShareViewerDialog(
                                     }
 
                                     IconButton(onClick = {
-                                        isMuted = !isMuted
+                                        val newMuted = !isMuted
+                                        isMuted = newMuted
+                                        // Apply volume change to the actual VideoView
+                                        videoViewRef?.let { vv ->
+                                            try {
+                                                val mp = vv::class.java
+                                                    .getDeclaredField("mMediaPlayer")
+                                                    .also { it.isAccessible = true }
+                                                    .get(vv) as? android.media.MediaPlayer
+                                                mp?.setVolume(
+                                                    if (newMuted) 0f else 1f,
+                                                    if (newMuted) 0f else 1f
+                                                )
+                                            } catch (_: Exception) {}
+                                        }
                                     }) {
                                         Icon(
                                             if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
@@ -418,13 +440,6 @@ fun ScreenShareViewerDialog(
                     }
                 }
             }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            videoViewRef?.stopPlayback()
-            videoViewRef = null
         }
     }
 }
