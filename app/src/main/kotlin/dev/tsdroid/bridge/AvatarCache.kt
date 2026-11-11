@@ -52,6 +52,7 @@ class AvatarCache(private val cacheDir: File) {
             // UID contains / and = which are invalid in filenames — URL-encode for disk cache
             val safeFileName = URLEncoder.encode(uid, "UTF-8")
             val diskFile = File(avatarsDir, safeFileName)
+            var bytes: ByteArray? = null
             // Try disk cache first
             if (diskFile.exists() && diskFile.length() > 0) {
                 bytes = try { diskFile.readBytes() } catch (_: Exception) { null }
