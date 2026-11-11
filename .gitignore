@@ -12,3 +12,5 @@
 *.zip
 /app/build
 /app/src/main/jniLibs
+*.keystore
+*.jks
