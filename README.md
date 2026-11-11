@@ -82,11 +82,14 @@ Unlike outdated legacy clients, **OpenTS** was designed from the ground up prior
 
 ## 📥 Quick Start & Installation
 
-You can download the pre-compiled APK from the [**Releases**](../../releases) page:
+You can download the pre-compiled, signed APK directly:
 
-1. Download **`app-debug.apk`**.
-2. Install it on your Android device (requires Android 10 / API 29 or higher).
-3. Grant Audio Recording permission on first launch.
+👉 [**Download OpenTS v1.0.0 APK (Direct Link)**](https://raw.githubusercontent.com/NearCorp/OpenTS/release-binaries/OpenTS-v1.0.0.apk)  
+*(Or check the [**GitHub Releases**](https://github.com/NearCorp/OpenTS/releases) page)*
+
+1. Download **`OpenTS-v1.0.0.apk`** (64 MB, signed with release keystore).
+2. Install it on your Android device (supports Android 8.0 / API 26+; Android 10+ recommended).
+3. Grant Audio Recording and Bluetooth permissions on first launch.
 4. Connect to any TeamSpeak 3 server and start chatting!
 
 ---
