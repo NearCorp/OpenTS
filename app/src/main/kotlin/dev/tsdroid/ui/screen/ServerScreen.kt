@@ -9,8 +9,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import android.app.Activity
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import dev.tsdroid.bridge.InputDeviceInfo
@@ -34,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.ScreenShare
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -217,6 +220,73 @@ fun ServerScreen(
     }
     if (connectionState == ConnectionState.DISCONNECTED) return
 
+    var showExitDialog by remember { mutableStateOf(false) }
+
+    BackHandler {
+        when {
+            chatOpen -> chatOpen = false
+            selectedUserForDetails != null -> selectedUserForDetails = null
+            userForScreenShare != null -> userForScreenShare = null
+            fileManagerOpen -> viewModel.toggleFileManager()
+            showSettings -> showSettings = false
+            else -> showExitDialog = true
+        }
+    }
+
+    if (showExitDialog) {
+        val activity = context as? Activity
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            icon = {
+                Icon(
+                    Icons.AutoMirrored.Filled.ExitToApp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            },
+            title = {
+                Text(stringResource(R.string.leave_server_title))
+            },
+            text = {
+                Text(stringResource(R.string.leave_server_desc))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExitDialog = false
+                        viewModel.disconnect()
+                    },
+                ) {
+                    Text(
+                        stringResource(R.string.disconnect),
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            showExitDialog = false
+                            activity?.moveTaskToBack(true)
+                        },
+                    ) {
+                        Text(stringResource(R.string.action_minimize))
+                    }
+                    TextButton(
+                        onClick = {
+                            showExitDialog = false
+                            onDisconnected()
+                        },
+                    ) {
+                        Text(stringResource(R.string.action_to_main_menu))
+                    }
+                }
+            },
+        )
+    }
+
     val totalUnread = unreadChannel + totalUnreadPrivate
 
     if (showSettings) {
@@ -289,6 +359,14 @@ fun ServerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = { onDisconnected() }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_to_main_menu),
+                        )
+                    }
+                },
                 title = {
                     Column {
                         Text(

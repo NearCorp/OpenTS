@@ -53,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -118,6 +119,8 @@ fun ConnectionScreen(
     val bookmarks by viewModel.bookmarks.collectAsState()
     val bookmarkIcons by viewModel.bookmarkIcons.collectAsState()
     val autoReconnect by viewModel.autoReconnect.collectAsState()
+    val isSessionActive by viewModel.isSessionActive.collectAsState()
+    val activeSessionServer by viewModel.activeSessionServer.collectAsState()
     val editingIndex by viewModel.editingIndex.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -155,6 +158,7 @@ fun ConnectionScreen(
     ) { /* checked at usage */ }
 
     LaunchedEffect(Unit) {
+        viewModel.checkActiveSession()
         val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
@@ -266,6 +270,67 @@ fun ConnectionScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
             Spacer(Modifier.height(4.dp))
+
+            // Active Connection Card
+            if (isSessionActive) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF4CAF50)),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.active_connection_title),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = activeSessionServer ?: stringResource(R.string.server),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Button(
+                                onClick = onConnected,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(R.string.return_to_server))
+                            }
+                            OutlinedButton(
+                                onClick = { viewModel.disconnectActiveSession() },
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Text(stringResource(R.string.disconnect))
+                            }
+                        }
+                    }
+                }
+            }
 
             // Quick Connect Card
             Card(

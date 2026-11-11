@@ -195,4 +195,12 @@
     <string name="error_not_connected">Not connected to server</string>
     <string name="error_download_failed">File download failed</string>
     <string name="bookmark_saved">Bookmark saved</string>
+
+    <!-- Navigation & Active session -->
+    <string name="active_connection_title">Active Connection</string>
+    <string name="return_to_server">Return to Server</string>
+    <string name="leave_server_title">Leave Server</string>
+    <string name="leave_server_desc">Would you like to disconnect, minimize the app to background, or return to the main menu?</string>
+    <string name="action_minimize">Minimize</string>
+    <string name="action_to_main_menu">Main Menu</string>
 </resources>

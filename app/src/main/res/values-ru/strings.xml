@@ -195,4 +195,12 @@
     <string name="error_not_connected">Нет подключения к серверу</string>
     <string name="error_download_failed">Не удалось загрузить файл</string>
     <string name="bookmark_saved">Закладка сохранена</string>
+
+    <!-- Navigation & Active session -->
+    <string name="active_connection_title">Активное подключение</string>
+    <string name="return_to_server">Вернуться на сервер</string>
+    <string name="leave_server_title">Выход из сервера</string>
+    <string name="leave_server_desc">Вы хотите отключиться от сервера, свернуть приложение или перейти в главное меню?</string>
+    <string name="action_minimize">Свернуть</string>
+    <string name="action_to_main_menu">В главное меню</string>
 </resources>

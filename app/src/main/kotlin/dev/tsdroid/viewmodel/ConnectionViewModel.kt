@@ -160,6 +160,7 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
                 loadBookmarkIcons(list)
             }
         }
+        checkActiveSession()
     }
 
     private fun loadBookmarkIcons(bookmarks: List<ServerBookmark>) {
@@ -189,11 +190,62 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<Int> = _connectionState.asStateFlow()
 
+    private val _isSessionActive = MutableStateFlow(false)
+    val isSessionActive: StateFlow<Boolean> = _isSessionActive.asStateFlow()
+
+    private val _activeSessionServer = MutableStateFlow<String?>(null)
+    val activeSessionServer: StateFlow<String?> = _activeSessionServer.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
     private var serviceBinder: TsConnectionService.LocalBinder? = null
     private var serviceConnection: ServiceConnection? = null
+
+    fun checkActiveSession() {
+        val context = getApplication<Application>()
+        val checkConn = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                val binder = service as? TsConnectionService.LocalBinder ?: return
+                serviceBinder = binder
+                viewModelScope.launch {
+                    binder.tsClient.state.collect { st ->
+                        if (st == ConnectionState.CONNECTED) {
+                            _isSessionActive.value = true
+                            _activeSessionServer.value = binder.tsClient.serverInfo.value?.name
+                                ?: binder.tsClient.serverAddress
+                                ?: context.getString(R.string.server)
+                        } else {
+                            _isSessionActive.value = false
+                            _activeSessionServer.value = null
+                        }
+                    }
+                }
+            }
+
+            override fun onServiceDisconnected(name: ComponentName?) {
+                _isSessionActive.value = false
+                _activeSessionServer.value = null
+            }
+        }
+        try {
+            val bound = context.bindService(
+                Intent(context, TsConnectionService::class.java),
+                checkConn,
+                Context.BIND_AUTO_CREATE,
+            )
+            if (bound) {
+                serviceConnection = checkConn
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun disconnectActiveSession() {
+        serviceBinder?.service?.disconnect()
+        _isSessionActive.value = false
+        _activeSessionServer.value = null
+        _connectionState.value = ConnectionState.DISCONNECTED
+    }
 
     fun connect(onConnected: () -> Unit) {
         val addr = address.value.trim()
